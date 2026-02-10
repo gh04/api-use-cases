@@ -69,6 +69,7 @@ class FileDownloader:
         self,
         url: str,
         dest_path: str,
+        expected_size: int | None,
         progress: Progress,
         task_id,
     ) -> str:
@@ -77,13 +78,23 @@ class FileDownloader:
         response = session.get(url, stream=True, timeout=60)
         response.raise_for_status()
 
-        total = int(response.headers.get("content-length", 0)) or None
+        # Prefer the size from the API; fall back to content-length header
+        total = expected_size or int(response.headers.get("content-length", 0)) or None
         progress.update(task_id, total=total)
 
+        written = 0
         with open(dest_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=self.chunk_size):
                 f.write(chunk)
+                written += len(chunk)
                 progress.advance(task_id, len(chunk))
+
+        # Verify size if the API told us what to expect
+        if expected_size and written != expected_size:
+            raise DownloadError(
+                os.path.basename(dest_path),
+                f"size mismatch: expected {expected_size} bytes, got {written}",
+            )
 
         return dest_path
 
@@ -140,11 +151,15 @@ class FileDownloader:
                 for file_info in files:
                     filename = file_info["name"]
                     url = file_info["url"]
+                    expected_size = int(file_info["size"]) if file_info.get("size") else None
                     dest = self._resolve_dest_path(target_dir, filename)
 
-                    task_id = file_progress.add_task(filename, total=None)
+                    task_id = file_progress.add_task(
+                        filename, total=expected_size,
+                    )
                     future = executor.submit(
-                        self._download_single, url, dest, file_progress, task_id
+                        self._download_single, url, dest, expected_size,
+                        file_progress, task_id,
                     )
                     futures[future] = (filename, task_id)
 

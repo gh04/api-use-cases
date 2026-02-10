@@ -106,6 +106,15 @@ def select_forms(forms: list[dict]) -> list[dict]:
     return selected
 
 
+def _human_size(num_bytes: int) -> str:
+    """Format byte count as a human-readable string."""
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if abs(num_bytes) < 1024:
+            return f"{num_bytes:,.1f} {unit}"
+        num_bytes /= 1024
+    return f"{num_bytes:,.1f} PB"
+
+
 # ── Main flow ───────────────────────────────────────────────────────
 
 def main() -> None:
@@ -163,7 +172,11 @@ def main() -> None:
             console.print("[yellow]No uploaded files found for this form.[/yellow]")
             continue
 
-        console.print(f"Found [bold]{len(files)}[/bold] uploaded file(s).")
+        total_size = sum(int(f.get("size", 0)) for f in files)
+        console.print(
+            f"Found [bold]{len(files)}[/bold] file(s)"
+            f"  ({_human_size(total_size)})"
+        )
 
         if not Confirm.ask("Download?", default=True):
             continue
