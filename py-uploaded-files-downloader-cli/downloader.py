@@ -37,10 +37,12 @@ class FileDownloader:
 
     def __init__(
         self,
+        api_key: str,
         output_dir: str = "./downloads",
         max_workers: int = 4,
         chunk_size: int = 8192,
     ):
+        self.api_key = api_key
         self.output_dir = output_dir
         self.max_workers = max_workers
         self.chunk_size = chunk_size
@@ -62,7 +64,9 @@ class FileDownloader:
     def _get_session(self) -> requests.Session:
         """Return a thread-local session (one per worker thread)."""
         if not hasattr(self._local, "session"):
-            self._local.session = requests.Session()
+            session = requests.Session()
+            session.headers.update({"apiKey": self.api_key})
+            self._local.session = session
         return self._local.session
 
     def _download_single(

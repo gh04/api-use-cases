@@ -151,6 +151,7 @@ def main() -> None:
 
     # 3. Download files from each selected form
     downloader = FileDownloader(
+        api_key=api_key,
         output_dir=args.output_dir,
         max_workers=args.workers,
     )
