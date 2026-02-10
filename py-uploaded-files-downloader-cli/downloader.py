@@ -77,28 +77,37 @@ class FileDownloader:
         progress: Progress,
         task_id,
     ) -> str:
-        """Download a single file with per-file progress tracking."""
+        """Download a single file with per-file progress tracking.
+
+        Removes the partial file from disk if anything goes wrong.
+        """
         session = self._get_session()
-        response = session.get(url, stream=True, timeout=60)
-        response.raise_for_status()
+        try:
+            response = session.get(url, stream=True, timeout=60)
+            response.raise_for_status()
 
-        # Prefer the size from the API; fall back to content-length header
-        total = expected_size or int(response.headers.get("content-length", 0)) or None
-        progress.update(task_id, total=total)
+            # Prefer the size from the API; fall back to content-length header
+            total = expected_size or int(response.headers.get("content-length", 0)) or None
+            progress.update(task_id, total=total)
 
-        written = 0
-        with open(dest_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=self.chunk_size):
-                f.write(chunk)
-                written += len(chunk)
-                progress.advance(task_id, len(chunk))
+            written = 0
+            with open(dest_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=self.chunk_size):
+                    f.write(chunk)
+                    written += len(chunk)
+                    progress.advance(task_id, len(chunk))
 
-        # Verify size if the API told us what to expect
-        if expected_size and written != expected_size:
-            raise DownloadError(
-                os.path.basename(dest_path),
-                f"size mismatch: expected {expected_size} bytes, got {written}",
-            )
+            # Verify size if the API told us what to expect
+            if expected_size and written != expected_size:
+                raise DownloadError(
+                    os.path.basename(dest_path),
+                    f"size mismatch: expected {expected_size} bytes, got {written}",
+                )
+        except BaseException:
+            # Clean up partial/corrupt file on any failure
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
+            raise
 
         return dest_path
 

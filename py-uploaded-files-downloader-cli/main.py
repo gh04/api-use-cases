@@ -132,7 +132,7 @@ def main() -> None:
 
     try:
         with console.status("Verifying API key and fetching forms..."):
-            forms = client.get_forms()
+            forms = client.get_all_forms()
     except JotformAPIError as e:
         console.print(f"[red]API error: {e}[/red]")
         sys.exit(1)
@@ -198,4 +198,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelled.[/yellow]")
+        sys.exit(130)

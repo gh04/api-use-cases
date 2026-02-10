@@ -4,7 +4,7 @@ A clean, modern wrapper around the JotForm REST API using the requests library.
 """
 
 import json
-from urllib.parse import urlencode
+import time
 
 import requests
 
@@ -24,21 +24,26 @@ class JotformAPIClient:
         api_key: Your JotForm API key.
         base_url: API base URL. Override for EU accounts or self-hosted.
         output_type: Response format - 'json' or 'xml'.
+        max_retries: Number of retries on 429 rate-limit responses.
     """
+
+    DEFAULT_PAGE_SIZE = 100
 
     def __init__(
         self,
         api_key: str,
         base_url: str = "https://api.jotform.com/v1",
         output_type: str = "json",
+        max_retries: int = 4,
     ):
         self.base_url = base_url.rstrip("/")
         self.output_type = output_type.lower()
+        self.max_retries = max_retries
         self._session = requests.Session()
         self._session.headers.update({"apiKey": api_key})
 
     def _request(self, method: str, path: str, params: dict | None = None) -> dict | str:
-        """Make an API request and return the parsed response content."""
+        """Make an API request with automatic retry on 429 rate-limit."""
         url = f"{self.base_url}{path}"
         if self.output_type != "json":
             url += ".xml"
@@ -46,21 +51,43 @@ class JotformAPIClient:
         kwargs: dict = {}
         if method == "GET" and params:
             kwargs["params"] = params
-        elif method in ("POST", "DELETE") and params:
-            kwargs["data"] = params
-        elif method == "PUT" and params:
+        elif params:
             kwargs["data"] = params
 
-        try:
-            response = self._session.request(method, url, **kwargs)
-            response.raise_for_status()
-        except requests.RequestException as e:
-            status = getattr(e.response, "status_code", None) if hasattr(e, "response") else None
-            raise JotformAPIError(str(e), status_code=status) from e
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self._session.request(method, url, **kwargs)
 
-        if self.output_type == "json":
-            return response.json().get("content")
-        return response.text
+                if response.status_code == 429:
+                    if attempt < self.max_retries:
+                        wait = 2 ** (attempt + 1)  # 2s, 4s, 8s, 16s
+                        time.sleep(wait)
+                        continue
+                    raise JotformAPIError(
+                        "Rate limit exceeded (429). Retries exhausted.",
+                        status_code=429,
+                    )
+
+                response.raise_for_status()
+            except requests.RequestException as e:
+                # Extract the API's own error message when available
+                msg = str(e)
+                status = None
+                if hasattr(e, "response") and e.response is not None:
+                    status = e.response.status_code
+                    try:
+                        body = e.response.json()
+                        if "message" in body:
+                            msg = body["message"]
+                    except (ValueError, KeyError):
+                        pass
+                raise JotformAPIError(msg, status_code=status) from e
+
+            if self.output_type == "json":
+                return response.json().get("content")
+            return response.text
+
+        raise JotformAPIError("Request failed after retries.")
 
     def _build_conditions(
         self,
@@ -97,9 +124,32 @@ class JotformAPIClient:
         filter_array: dict | None = None,
         order_by: str | None = None,
     ) -> list[dict]:
-        """Get a list of forms for this account."""
+        """Get a single page of forms for this account."""
         params = self._build_conditions(offset, limit, filter_array, order_by)
         return self._request("GET", "/user/forms", params or None)
+
+    def get_all_forms(
+        self,
+        filter_array: dict | None = None,
+        order_by: str | None = None,
+    ) -> list[dict]:
+        """Fetch every form by paginating automatically."""
+        all_forms: list[dict] = []
+        offset = 0
+        while True:
+            page = self.get_forms(
+                offset=offset,
+                limit=self.DEFAULT_PAGE_SIZE,
+                filter_array=filter_array,
+                order_by=order_by,
+            )
+            if not page:
+                break
+            all_forms.extend(page)
+            if len(page) < self.DEFAULT_PAGE_SIZE:
+                break
+            offset += self.DEFAULT_PAGE_SIZE
+        return all_forms
 
     def get_submissions(
         self,
