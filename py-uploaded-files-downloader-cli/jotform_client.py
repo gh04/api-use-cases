@@ -226,9 +226,34 @@ class JotformAPIClient:
         filter_array: dict | None = None,
         order_by: str | None = None,
     ) -> list[dict]:
-        """List of a form's submissions."""
+        """List of a single page of a form's submissions."""
         params = self._build_conditions(offset, limit, filter_array, order_by)
         return self._request("GET", f"/form/{form_id}/submissions", params or None)
+
+    def get_all_form_submissions(
+        self,
+        form_id: str,
+        filter_array: dict | None = None,
+        order_by: str | None = None,
+    ) -> list[dict]:
+        """Fetch every submission for a form by paginating automatically."""
+        all_subs: list[dict] = []
+        offset = 0
+        while True:
+            page = self.get_form_submissions(
+                form_id,
+                offset=offset,
+                limit=self.DEFAULT_PAGE_SIZE,
+                filter_array=filter_array,
+                order_by=order_by,
+            )
+            if not page:
+                break
+            all_subs.extend(page)
+            if len(page) < self.DEFAULT_PAGE_SIZE:
+                break
+            offset += self.DEFAULT_PAGE_SIZE
+        return all_subs
 
     def create_form_submission(self, form_id: str, submission: dict) -> dict:
         """Submit data to this form using the API."""

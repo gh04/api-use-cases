@@ -9,7 +9,9 @@ Usage:
 
 import argparse
 import os
+import re
 import sys
+from urllib.parse import unquote, urlparse
 
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
@@ -115,6 +117,70 @@ def _human_size(num_bytes: int) -> str:
     return f"{num_bytes:,.1f} PB"
 
 
+def _sanitize(text: str) -> str:
+    """Strip characters that are unsafe in filenames."""
+    return re.sub(r'[\\/*?:"<>|]', "", text).strip()
+
+
+def _filename_from_url(url: str) -> str:
+    """Extract the original filename from a JotForm upload URL."""
+    path = urlparse(url).path
+    return unquote(path.rsplit("/", 1)[-1]) if "/" in path else "file"
+
+
+def _extract_submitter_name(answers: dict) -> tuple[str, str]:
+    """Return (last, first) from the first fullname field found, or empty strings."""
+    for answer in answers.values():
+        if not isinstance(answer, dict):
+            continue
+        if answer.get("type") == "control_fullname" and isinstance(answer.get("answer"), dict):
+            parts = answer["answer"]
+            return (
+                _sanitize(parts.get("last", "")),
+                _sanitize(parts.get("first", "")),
+            )
+    return ("", "")
+
+
+def extract_files_from_submissions(submissions: list[dict]) -> list[dict]:
+    """Build a flat file list from submissions, prefixed with submitter info.
+
+    Each returned dict has keys: name, url (and no size — the downloader
+    falls back to Content-Length).
+
+    Filename format:  lastname_firstname_submissionid_originalfile.ext
+    If no name field:  submissionid_originalfile.ext
+    """
+    files: list[dict] = []
+    for sub in submissions:
+        sub_id = str(sub.get("id", ""))
+        answers = sub.get("answers", {})
+        last, first = _extract_submitter_name(answers)
+
+        # Build prefix parts, skipping empty segments
+        prefix_parts = [p for p in (last, first, sub_id) if p]
+        prefix = "_".join(prefix_parts)
+
+        for answer in answers.values():
+            if not isinstance(answer, dict):
+                continue
+            if answer.get("type") != "control_fileupload":
+                continue
+            raw = answer.get("answer")
+            if not raw:
+                continue
+            # answer can be a single URL string or a list of URLs
+            urls = raw if isinstance(raw, list) else [raw]
+            for url in urls:
+                if not isinstance(url, str) or not url.startswith("http"):
+                    continue
+                original = _filename_from_url(url)
+                name = f"{prefix}_{original}" if prefix else original
+                files.append({"name": name, "url": url})
+
+    return files
+
+
 # ── Main flow ───────────────────────────────────────────────────────
 
 def main() -> None:
@@ -163,20 +229,20 @@ def main() -> None:
         console.print(f"\n[bold]--- {form_title} (ID: {form_id}) ---[/bold]")
 
         try:
-            with console.status("Fetching file list..."):
-                files = client.get_form_files(form_id)
+            with console.status("Fetching submissions and files..."):
+                submissions = client.get_all_form_submissions(form_id)
+                files = extract_files_from_submissions(submissions)
         except JotformAPIError as e:
-            console.print(f"[red]Could not fetch files: {e}[/red]")
+            console.print(f"[red]Could not fetch submissions: {e}[/red]")
             continue
 
         if not files:
             console.print("[yellow]No uploaded files found for this form.[/yellow]")
             continue
 
-        total_size = sum(int(f.get("size", 0)) for f in files)
         console.print(
             f"Found [bold]{len(files)}[/bold] file(s)"
-            f"  ({_human_size(total_size)})"
+            f" from [bold]{len(submissions)}[/bold] submission(s)"
         )
 
         if not Confirm.ask("Download?", default=True):
