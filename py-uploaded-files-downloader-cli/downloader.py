@@ -1,6 +1,7 @@
 """File download manager with concurrent downloads and rich progress display."""
 
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
@@ -43,7 +44,7 @@ class FileDownloader:
         self.output_dir = output_dir
         self.max_workers = max_workers
         self.chunk_size = chunk_size
-        self._session = requests.Session()
+        self._local = threading.local()
 
     def _resolve_dest_path(self, directory: str, filename: str) -> str:
         """Build a destination path, adding a numeric suffix on collision."""
@@ -58,6 +59,12 @@ class FileDownloader:
             counter += 1
         return dest
 
+    def _get_session(self) -> requests.Session:
+        """Return a thread-local session (one per worker thread)."""
+        if not hasattr(self._local, "session"):
+            self._local.session = requests.Session()
+        return self._local.session
+
     def _download_single(
         self,
         url: str,
@@ -66,7 +73,8 @@ class FileDownloader:
         task_id,
     ) -> str:
         """Download a single file with per-file progress tracking."""
-        response = self._session.get(url, stream=True, timeout=60)
+        session = self._get_session()
+        response = session.get(url, stream=True, timeout=60)
         response.raise_for_status()
 
         total = int(response.headers.get("content-length", 0)) or None
