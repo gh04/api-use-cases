@@ -48,6 +48,7 @@ export default class JotformBlockoutManager extends LightningElement {
 
     buildFormEntry(f) {
         const appointments = f.appointments.map(aq => this.buildAppointmentEntry(f.formId, aq));
+        const hasDirty = appointments.some(aq => aq.dirty);
         return {
             formId: f.formId,
             formName: f.formName,
@@ -55,7 +56,8 @@ export default class JotformBlockoutManager extends LightningElement {
             selected: false,
             expanded: false,
             expandIcon: 'utility:chevronright',
-            hasDirty: appointments.some(aq => aq.dirty),
+            hasDirty,
+            cardClass: hasDirty ? 'form-card form-card-dirty' : 'form-card',
             appointments
         };
     }
@@ -198,7 +200,8 @@ export default class JotformBlockoutManager extends LightningElement {
                 }];
                 return { ...aq, blockoutDates: updated, dirty: true, dirtyFields: { ...aq.dirtyFields, blockoutDates: true } };
             });
-            return { ...f, appointments, hasDirty: appointments.some(aq => aq.dirty) };
+            const hasDirty = appointments.some(aq => aq.dirty);
+            return { ...f, appointments, hasDirty, cardClass: hasDirty ? 'form-card form-card-dirty' : 'form-card' };
         });
         this.bulkStartDate = null;
         this.bulkEndDate = null;
@@ -216,7 +219,8 @@ export default class JotformBlockoutManager extends LightningElement {
                 if (aq.blockoutDates.length === 0) return aq;
                 return { ...aq, blockoutDates: [], dirty: true, dirtyFields: { ...aq.dirtyFields, blockoutDates: true } };
             });
-            return { ...f, appointments, hasDirty: appointments.some(aq => aq.dirty) };
+            const hasDirty = appointments.some(aq => aq.dirty);
+            return { ...f, appointments, hasDirty, cardClass: hasDirty ? 'form-card form-card-dirty' : 'form-card' };
         });
         this.showToast('Success', 'Blockout dates cleared on selected forms', 'success');
     }
@@ -241,7 +245,8 @@ export default class JotformBlockoutManager extends LightningElement {
                 const updated = [...aq.intervals, { ...newIv, key: f.formId + '-' + aq.qid + '-iv-' + Date.now() }];
                 return { ...aq, intervals: updated, dirty: true, dirtyFields: { ...aq.dirtyFields, intervals: true } };
             });
-            return { ...f, appointments, hasDirty: appointments.some(aq => aq.dirty) };
+            const hasDirty = appointments.some(aq => aq.dirty);
+            return { ...f, appointments, hasDirty, cardClass: hasDirty ? 'form-card form-card-dirty' : 'form-card' };
         });
         this.bulkIntervalFrom = null;
         this.bulkIntervalTo = null;
@@ -399,7 +404,8 @@ export default class JotformBlockoutManager extends LightningElement {
         this.forms = this.forms.map(f => {
             if (f.formId !== formId) return f;
             const appointments = f.appointments.map(aq => aq.qid !== qid ? aq : updater(aq));
-            return { ...f, appointments, hasDirty: appointments.some(aq => aq.dirty) };
+            const hasDirty = appointments.some(aq => aq.dirty);
+            return { ...f, appointments, hasDirty, cardClass: hasDirty ? 'form-card form-card-dirty' : 'form-card' };
         });
     }
 

@@ -1,24 +1,127 @@
+/* ── Component host ────────────────────────────────────── */
+:host {
+    --border-color: var(--slds-g-color-border-1, #c9c9c9);
+    --surface-primary: var(--slds-g-color-surface-1, #ffffff);
+    --surface-secondary: var(--slds-g-color-surface-2, #f3f3f3);
+    --text-secondary: var(--slds-g-color-on-surface-1, #5c5c5c);
+    --text-primary: var(--slds-g-color-on-surface-2, #2e2e2e);
+    --accent: var(--slds-g-color-accent-1, #0176d3);
+    --radius: var(--slds-g-radius-border-2, 0.5rem);
+    --spacing-xs: var(--slds-g-spacing-1, 0.25rem);
+    --spacing-sm: var(--slds-g-spacing-3, 0.75rem);
+    --spacing-md: var(--slds-g-spacing-4, 1rem);
+}
+
+/* ── Form row expand toggle ───────────────────────────── */
 .slds-button_reset {
     text-align: left;
     cursor: pointer;
+    color: var(--text-primary);
+    font-weight: var(--slds-g-font-weight-6, 600);
 }
 
 .slds-button_reset:hover {
     text-decoration: underline;
+    color: var(--accent);
 }
 
+/* ── Form card ────────────────────────────────────────── */
+.form-card {
+    background: var(--surface-primary);
+    border: var(--slds-g-sizing-border-1, 1px) solid var(--border-color);
+    border-radius: var(--radius);
+    margin-bottom: var(--spacing-sm);
+    transition: box-shadow 0.15s ease;
+}
+
+.form-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.form-card-dirty {
+    border-left: 3px solid var(--accent);
+}
+
+/* ── Delete icon column ───────────────────────────────── */
 .delete-col {
     width: 2.5rem;
     max-width: 2.5rem;
     text-align: center;
+    flex-shrink: 0;
 }
 
-.add-row {
-    background-color: #f4f6f9;
-    border: 1px dashed #c9c9c9;
-    border-radius: 0.25rem;
-}
-
+/* ── Interval row ─────────────────────────────────────── */
 .interval-row {
-    padding: 0.25rem 0;
+    padding: var(--spacing-xs) 0;
+    border-bottom: 1px solid var(--surface-secondary);
+}
+
+.interval-row:last-of-type {
+    border-bottom: none;
+}
+
+/* ── Add row (new interval / new blockout) ────────────── */
+.add-row {
+    background-color: var(--surface-secondary);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius);
+}
+
+.add-row-hint {
+    color: var(--text-secondary);
+    font-size: var(--slds-g-font-scale-neg-2, 0.75rem);
+    line-height: var(--slds-g-font-lineheight-2, 1.25);
+}
+
+/* ── Section header ───────────────────────────────────── */
+.section-title {
+    color: var(--text-secondary);
+    font-size: var(--slds-g-font-scale-neg-2, 0.75rem);
+    font-weight: var(--slds-g-font-weight-7, 700);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-bottom: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+    border-bottom: var(--slds-g-sizing-border-1, 1px) solid var(--border-color);
+}
+
+/* ── Bulk actions panel ───────────────────────────────── */
+.bulk-panel {
+    background: var(--surface-secondary);
+    border: var(--slds-g-sizing-border-1, 1px) solid var(--border-color);
+    border-radius: var(--radius);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+/* ── Per-form actions footer ──────────────────────────── */
+.form-actions {
+    border-top: var(--slds-g-sizing-border-1, 1px) solid var(--border-color);
+    padding-top: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
+    text-align: right;
+}
+
+/* ── Badge refinements ────────────────────────────────── */
+.badge-modified {
+    background-color: var(--accent);
+    color: var(--slds-g-color-on-accent-1, #ffffff);
+    border-radius: var(--slds-g-radius-border-2, 0.5rem);
+    padding: 0.125rem 0.5rem;
+    font-size: var(--slds-g-font-scale-neg-2, 0.75rem);
+    font-weight: var(--slds-g-font-weight-6, 600);
+}
+
+/* ── Settings grid ────────────────────────────────────── */
+.settings-grid {
+    background: var(--surface-secondary);
+    border-radius: var(--radius);
+    padding: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+/* ── Blockout dates table ─────────────────────────────── */
+.blockout-table {
+    border-radius: var(--radius);
+    overflow: hidden;
 }

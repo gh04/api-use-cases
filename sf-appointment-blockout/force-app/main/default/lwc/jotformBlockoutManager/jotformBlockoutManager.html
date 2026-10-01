@@ -35,7 +35,7 @@
             <div class="slds-p-around_medium">
 
                 <!-- ═══ Bulk Actions ═══ -->
-                <div class="slds-box slds-m-bottom_medium slds-theme_shade">
+                <div class="bulk-panel">
                     <h3 class="slds-text-heading_small slds-m-bottom_small">Bulk Actions</h3>
 
                     <!-- Select all -->
@@ -48,7 +48,7 @@
                     </div>
 
                     <!-- Bulk blockout dates -->
-                    <p class="slds-text-title_caps slds-m-bottom_xx-small slds-m-top_small">Blockout Dates</p>
+                    <div class="section-title slds-m-top_small">Blockout Dates</div>
                     <div class="slds-grid slds-gutters slds-wrap slds-grid_vertical-align-end">
                         <div class="slds-col slds-size_3-of-12">
                             <lightning-input type="date" label="Start Date" value={bulkStartDate} onchange={handleBulkStartDate}
@@ -67,7 +67,7 @@
                     </div>
 
                     <!-- Bulk interval -->
-                    <p class="slds-text-title_caps slds-m-bottom_xx-small slds-m-top_medium">Availability Interval</p>
+                    <div class="section-title slds-m-top_medium">Availability Interval</div>
                     <div class="slds-grid slds-gutters slds-wrap slds-grid_vertical-align-end">
                         <div class="slds-col slds-size_2-of-12">
                             <lightning-input type="time" label="From" value={bulkIntervalFrom} onchange={handleBulkIntervalFrom}
@@ -88,27 +88,27 @@
 
                 <!-- ═══ Form List ═══ -->
                 <template for:each={forms} for:item="form">
-                    <div key={form.formId} class="slds-box slds-m-bottom_small">
+                    <div key={form.formId} class={form.cardClass}>
 
                         <!-- Form header -->
-                        <div class="slds-grid slds-grid_vertical-align-center slds-p-bottom_small">
-                            <div class="slds-col slds-size_1-of-12">
+                        <div class="slds-grid slds-grid_vertical-align-center slds-p-around_small">
+                            <div class="slds-col slds-shrink-none" style="width:2rem">
                                 <lightning-input type="checkbox" checked={form.selected} data-form-id={form.formId} onchange={handleFormSelect} variant="label-hidden" label="Select form"></lightning-input>
                             </div>
-                            <div class="slds-col slds-size_8-of-12 slds-p-left_small">
+                            <div class="slds-col slds-grow slds-p-left_small">
                                 <button class="slds-button slds-button_reset slds-text-heading_small" data-form-id={form.formId} onclick={handleToggleExpand}>
                                     <lightning-icon icon-name={form.expandIcon} size="x-small" class="slds-m-right_x-small"></lightning-icon>
                                     {form.formName}
                                 </button>
                                 <span class="slds-text-body_small slds-text-color_weak slds-m-left_small">ID: {form.formId}</span>
                             </div>
-                            <div class="slds-col slds-size_3-of-12 slds-text-align_right">
+                            <div class="slds-col slds-shrink-none slds-text-align_right">
                                 <template for:each={form.appointments} for:item="aq">
                                     <span key={aq.key}>
                                         <span class="slds-badge">{aq.blockoutDates.length} blockout(s)</span>
                                         <span class="slds-badge slds-m-left_xx-small">{aq.intervals.length} interval(s)</span>
                                         <template if:true={aq.dirty}>
-                                            <span class="slds-badge slds-badge_inverse slds-m-left_xx-small">Modified</span>
+                                            <span class="badge-modified slds-m-left_xx-small">Modified</span>
                                         </template>
                                     </span>
                                 </template>
@@ -117,56 +117,58 @@
 
                         <!-- Error -->
                         <template if:true={form.errorMessage}>
-                            <div class="slds-text-color_error slds-p-left_large">Error: {form.errorMessage}</div>
+                            <div class="slds-text-color_error slds-p-horizontal_medium slds-p-bottom_small">Error: {form.errorMessage}</div>
                         </template>
 
                         <!-- ═══ Expanded Detail ═══ -->
                         <template if:true={form.expanded}>
                             <template for:each={form.appointments} for:item="aq">
-                                <div key={aq.key} class="slds-p-left_large slds-p-top_small slds-border_top">
+                                <div key={aq.key} class="slds-p-horizontal_medium slds-p-top_small slds-border_top">
                                     <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small">
                                         <p class="slds-text-title_caps slds-col">{aq.text}</p>
                                     </div>
 
                                     <!-- Settings row -->
-                                    <div class="slds-grid slds-gutters slds-wrap slds-m-bottom_medium">
-                                        <div class="slds-col slds-size_2-of-12">
-                                            <lightning-combobox label="Type" value={aq.appointmentType} options={typeOptions}
-                                                data-form-id={form.formId} data-qid={aq.qid} data-field="appointmentType"
-                                                onchange={handleSettingChange}
-                                                field-level-help="Single: one person per slot. Group: multiple people share a slot."></lightning-combobox>
-                                        </div>
-                                        <div class="slds-col slds-size_2-of-12">
-                                            <lightning-input type="number" label="Duration (min)" value={aq.slotDuration}
-                                                data-form-id={form.formId} data-qid={aq.qid} data-field="slotDuration"
-                                                onchange={handleSettingChange} min="5"
-                                                field-level-help="Length of each appointment slot in minutes"></lightning-input>
-                                        </div>
-                                        <div class="slds-col slds-size_2-of-12">
-                                            <lightning-input type="number" label="Max Capacity" value={aq.maxAttendee}
-                                                data-form-id={form.formId} data-qid={aq.qid} data-field="maxAttendee"
-                                                onchange={handleSettingChange} min="1"
-                                                field-level-help="Maximum bookings per time slot"></lightning-input>
-                                        </div>
-                                        <div class="slds-col slds-size_3-of-12">
-                                            <lightning-input type="number" label="Rolling Days" value={aq.rollingDays}
-                                                data-form-id={form.formId} data-qid={aq.qid} data-field="rollingDays"
-                                                onchange={handleSettingChange} min="0"
-                                                field-level-help="How many days into the future users can book"></lightning-input>
-                                        </div>
-                                        <div class="slds-col slds-size_3-of-12">
-                                            <lightning-input type="number" label="Min Notice (hrs)" value={aq.minScheduleNotice}
-                                                data-form-id={form.formId} data-qid={aq.qid} data-field="minScheduleNotice"
-                                                onchange={handleSettingChange} min="0"
-                                                field-level-help="Minimum hours before an appointment can be booked"></lightning-input>
+                                    <div class="settings-grid">
+                                        <div class="slds-grid slds-gutters slds-wrap">
+                                            <div class="slds-col slds-size_2-of-12">
+                                                <lightning-combobox label="Type" value={aq.appointmentType} options={typeOptions}
+                                                    data-form-id={form.formId} data-qid={aq.qid} data-field="appointmentType"
+                                                    onchange={handleSettingChange}
+                                                    field-level-help="Single: one person per slot. Group: multiple people share a slot."></lightning-combobox>
+                                            </div>
+                                            <div class="slds-col slds-size_2-of-12">
+                                                <lightning-input type="number" label="Duration (min)" value={aq.slotDuration}
+                                                    data-form-id={form.formId} data-qid={aq.qid} data-field="slotDuration"
+                                                    onchange={handleSettingChange} min="5"
+                                                    field-level-help="Length of each appointment slot in minutes"></lightning-input>
+                                            </div>
+                                            <div class="slds-col slds-size_2-of-12">
+                                                <lightning-input type="number" label="Max Capacity" value={aq.maxAttendee}
+                                                    data-form-id={form.formId} data-qid={aq.qid} data-field="maxAttendee"
+                                                    onchange={handleSettingChange} min="1"
+                                                    field-level-help="Maximum bookings per time slot"></lightning-input>
+                                            </div>
+                                            <div class="slds-col slds-size_3-of-12">
+                                                <lightning-input type="number" label="Rolling Days" value={aq.rollingDays}
+                                                    data-form-id={form.formId} data-qid={aq.qid} data-field="rollingDays"
+                                                    onchange={handleSettingChange} min="0"
+                                                    field-level-help="How many days into the future users can book"></lightning-input>
+                                            </div>
+                                            <div class="slds-col slds-size_3-of-12">
+                                                <lightning-input type="number" label="Min Notice (hrs)" value={aq.minScheduleNotice}
+                                                    data-form-id={form.formId} data-qid={aq.qid} data-field="minScheduleNotice"
+                                                    onchange={handleSettingChange} min="0"
+                                                    field-level-help="Minimum hours before an appointment can be booked"></lightning-input>
+                                            </div>
                                         </div>
                                     </div>
 
                                     <!-- Availability Intervals -->
-                                    <p class="slds-text-title_caps slds-m-bottom_x-small">Availability Intervals</p>
+                                    <div class="section-title">Availability Intervals</div>
                                     <template if:true={aq.intervals.length}>
                                         <template for:each={aq.intervals} for:item="iv">
-                                            <div key={iv.key} class="slds-grid slds-gutters slds-wrap slds-grid_vertical-align-end slds-m-bottom_x-small interval-row">
+                                            <div key={iv.key} class="slds-grid slds-gutters slds-wrap slds-grid_vertical-align-end interval-row">
                                                 <div class="slds-col slds-size_2-of-12">
                                                     <lightning-input type="time" label="From" value={iv.fromTime}
                                                         data-form-id={form.formId} data-qid={aq.qid} data-iv-key={iv.key} data-time-field="fromTime"
@@ -182,7 +184,7 @@
                                                         data-form-id={form.formId} data-qid={aq.qid} data-iv-key={iv.key}
                                                         onchange={handleIntervalDaysChange}></lightning-checkbox-group>
                                                 </div>
-                                                <div class="slds-col slds-shrink-none delete-col">
+                                                <div class="slds-col delete-col">
                                                     <lightning-button-icon icon-name="utility:delete" alternative-text="Remove interval" variant="bare" size="small"
                                                         data-form-id={form.formId} data-qid={aq.qid} data-iv-key={iv.key}
                                                         onclick={handleRemoveInterval}></lightning-button-icon>
@@ -196,7 +198,7 @@
 
                                     <!-- Add interval -->
                                     <div class="add-row slds-m-bottom_medium slds-p-around_small">
-                                        <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">New interval — fill in and click Add</p>
+                                        <p class="add-row-hint slds-m-bottom_x-small">New interval — fill in and click Add</p>
                                         <div class="slds-grid slds-gutters slds-wrap slds-grid_vertical-align-end">
                                             <div class="slds-col slds-size_2-of-12">
                                                 <lightning-input type="time" label="From" value={aq.newIntervalFrom}
@@ -224,30 +226,32 @@
                                     </div>
 
                                     <!-- Blockout Dates -->
-                                    <p class="slds-text-title_caps slds-m-bottom_x-small">Blockout Dates</p>
+                                    <div class="section-title">Blockout Dates</div>
                                     <template if:true={aq.blockoutDates.length}>
-                                        <table class="slds-table slds-table_bordered slds-table_cell-buffer slds-m-bottom_small">
-                                            <thead>
-                                                <tr>
-                                                    <th scope="col">Start Date</th>
-                                                    <th scope="col">End Date</th>
-                                                    <th scope="col" style="width:3rem"></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <template for:each={aq.blockoutDates} for:item="bd">
-                                                    <tr key={bd.key}>
-                                                        <td>{bd.startDate}</td>
-                                                        <td>{bd.endDate}</td>
-                                                        <td>
-                                                            <lightning-button-icon icon-name="utility:delete" alternative-text="Remove" variant="bare" size="small"
-                                                                data-form-id={form.formId} data-qid={aq.qid} data-date-key={bd.key}
-                                                                onclick={handleRemoveBlockout}></lightning-button-icon>
-                                                        </td>
+                                        <div class="blockout-table slds-m-bottom_small">
+                                            <table class="slds-table slds-table_bordered slds-table_cell-buffer">
+                                                <thead>
+                                                    <tr>
+                                                        <th scope="col">Start Date</th>
+                                                        <th scope="col">End Date</th>
+                                                        <th scope="col" style="width:3rem"></th>
                                                     </tr>
-                                                </template>
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                    <template for:each={aq.blockoutDates} for:item="bd">
+                                                        <tr key={bd.key}>
+                                                            <td>{bd.startDate}</td>
+                                                            <td>{bd.endDate}</td>
+                                                            <td>
+                                                                <lightning-button-icon icon-name="utility:delete" alternative-text="Remove" variant="bare" size="small"
+                                                                    data-form-id={form.formId} data-qid={aq.qid} data-date-key={bd.key}
+                                                                    onclick={handleRemoveBlockout}></lightning-button-icon>
+                                                            </td>
+                                                        </tr>
+                                                    </template>
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </template>
                                     <template if:false={aq.blockoutDates.length}>
                                         <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">No blockout dates set.</p>
@@ -255,7 +259,7 @@
 
                                     <!-- Add blockout date -->
                                     <div class="add-row slds-m-bottom_small slds-p-around_small">
-                                        <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">New blockout — fill in and click Add</p>
+                                        <p class="add-row-hint slds-m-bottom_x-small">New blockout — fill in and click Add</p>
                                         <div class="slds-grid slds-gutters slds-grid_vertical-align-end">
                                             <div class="slds-col slds-size_4-of-12">
                                                 <lightning-input type="date" label="Start Date" value={aq.newStartDate}
@@ -280,7 +284,7 @@
                             </template>
 
                             <!-- Per-form actions -->
-                            <div class="slds-border_top slds-p-top_small slds-p-left_large slds-text-align_right">
+                            <div class="form-actions slds-p-horizontal_medium slds-p-bottom_small">
                                 <lightning-button label="Undo" icon-name="utility:undo" data-form-id={form.formId}
                                     onclick={handleUndoForm} disabled={isSaving}></lightning-button>
                                 <lightning-button variant="brand" label="Save" icon-name="utility:save" data-form-id={form.formId}
