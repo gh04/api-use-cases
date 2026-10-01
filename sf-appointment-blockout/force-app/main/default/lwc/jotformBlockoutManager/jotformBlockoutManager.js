@@ -96,19 +96,6 @@ export default class JotformBlockoutManager extends LightningElement {
         };
     }
 
-    // ── Summary line for collapsed view ───────────────────────
-
-    getSummary(aq) {
-        const parts = [];
-        const typeLabel = aq.appointmentType === 'multiple' ? 'Multiple' :
-            aq.appointmentType === 'group' ? 'Group' : 'Single';
-        parts.push(typeLabel);
-        if (aq.slotDuration) parts.push(aq.slotDuration + 'min');
-        if (aq.isMultipleOrGroup && aq.maxAttendee) parts.push('Cap: ' + aq.maxAttendee);
-        if (aq.rollingDays) parts.push(aq.rollingDays + 'd rolling');
-        return parts.join(' | ');
-    }
-
     // ── Computed properties ───────────────────────────────────
 
     get hasSelectedForms() { return this.forms.some(f => f.selected); }
@@ -123,6 +110,43 @@ export default class JotformBlockoutManager extends LightningElement {
     }
     get saveDisabled() { return this.isSaving || !this.forms.some(f => f.appointments.some(aq => aq.dirty)); }
     get undoDisabled() { return this.isSaving || !this.forms.some(f => f.appointments.some(aq => aq.dirty)); }
+
+    // ── Validation helpers ────────────────────────────────────
+
+    _timeToMinutes(timeStr) {
+        if (!timeStr) return null;
+        const parts = timeStr.split(':');
+        return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+    }
+
+    _validateTimeRange(fromTime, toTime, slotDuration) {
+        const fromMin = this._timeToMinutes(fromTime);
+        const toMin = this._timeToMinutes(toTime);
+        if (fromMin === null || toMin === null) return null;
+        if (toMin <= fromMin) {
+            return 'End time must be after start time';
+        }
+        if (slotDuration) {
+            const duration = parseInt(slotDuration, 10);
+            if (duration > 0 && (toMin - fromMin) < duration) {
+                return 'Time range must be at least ' + duration + ' minutes (slot duration)';
+            }
+        }
+        return null;
+    }
+
+    _datesOverlap(start1, end1, start2, end2) {
+        return start1 <= end2 && start2 <= end1;
+    }
+
+    _validateBlockoutOverlap(existingDates, newStart, newEnd) {
+        for (const d of existingDates) {
+            if (this._datesOverlap(newStart, newEnd, d.startDate, d.endDate)) {
+                return 'Overlaps with existing blockout ' + d.startDate + ' to ' + d.endDate;
+            }
+        }
+        return null;
+    }
 
     // ── Selection ─────────────────────────────────────────────
 
@@ -159,10 +183,15 @@ export default class JotformBlockoutManager extends LightningElement {
             return;
         }
         const nd = { startDate: this.bulkStartDate, endDate: this.bulkEndDate };
+        let skippedOverlap = 0;
         this.forms = this.forms.map(f => {
             if (!f.selected) return f;
             const appointments = f.appointments.map(aq => {
-                if (aq.blockoutDates.some(d => d.startDate === nd.startDate && d.endDate === nd.endDate)) return aq;
+                const overlapMsg = this._validateBlockoutOverlap(aq.blockoutDates, nd.startDate, nd.endDate);
+                if (overlapMsg) {
+                    skippedOverlap++;
+                    return aq;
+                }
                 const updated = [...aq.blockoutDates, {
                     ...nd, key: f.formId + '-' + aq.qid + '-bd-' + Date.now(),
                     label: nd.startDate === nd.endDate ? nd.startDate : nd.startDate + ' → ' + nd.endDate
@@ -173,7 +202,11 @@ export default class JotformBlockoutManager extends LightningElement {
         });
         this.bulkStartDate = null;
         this.bulkEndDate = null;
-        this.showToast('Success', 'Blockout dates added to selected forms', 'success');
+        if (skippedOverlap > 0) {
+            this.showToast('Warning', 'Added to selected forms. ' + skippedOverlap + ' skipped due to overlapping dates.', 'warning');
+        } else {
+            this.showToast('Success', 'Blockout dates added to selected forms', 'success');
+        }
     }
 
     handleBulkClearBlockout() {
@@ -196,6 +229,11 @@ export default class JotformBlockoutManager extends LightningElement {
 
     handleBulkAddInterval() {
         if (!this.bulkIntervalFrom || !this.bulkIntervalTo || !this.bulkIntervalDays.length) return;
+        const timeErr = this._validateTimeRange(this.bulkIntervalFrom, this.bulkIntervalTo);
+        if (timeErr) {
+            this.showToast('Error', timeErr, 'error');
+            return;
+        }
         const newIv = { fromTime: this.bulkIntervalFrom, toTime: this.bulkIntervalTo, days: [...this.bulkIntervalDays] };
         this.forms = this.forms.map(f => {
             if (!f.selected) return f;
@@ -241,12 +279,18 @@ export default class JotformBlockoutManager extends LightningElement {
     handleIntervalTimeChange(event) {
         const { formId, qid, ivKey, timeField } = event.currentTarget.dataset;
         const value = event.target.value;
-        this.updateAppointment(formId, qid, aq => ({
-            ...aq,
-            intervals: aq.intervals.map(iv => iv.key === ivKey ? { ...iv, [timeField]: value } : iv),
-            dirty: true,
-            dirtyFields: { ...aq.dirtyFields, intervals: true }
-        }));
+        this.updateAppointment(formId, qid, aq => {
+            const updated = aq.intervals.map(iv => {
+                if (iv.key !== ivKey) return iv;
+                const newIv = { ...iv, [timeField]: value };
+                const err = this._validateTimeRange(newIv.fromTime, newIv.toTime, aq.slotDuration);
+                if (err && newIv.fromTime && newIv.toTime) {
+                    this.showToast('Warning', err, 'warning');
+                }
+                return newIv;
+            });
+            return { ...aq, intervals: updated, dirty: true, dirtyFields: { ...aq.dirtyFields, intervals: true } };
+        });
     }
 
     handleRemoveInterval(event) {
@@ -277,7 +321,19 @@ export default class JotformBlockoutManager extends LightningElement {
     handlePerFormAddInterval(event) {
         const { formId, qid } = event.currentTarget.dataset;
         this.updateAppointment(formId, qid, aq => {
-            if (!aq.newIntervalFrom || !aq.newIntervalTo || !aq.newIntervalDays || !aq.newIntervalDays.length) return aq;
+            if (!aq.newIntervalFrom || !aq.newIntervalTo) {
+                this.showToast('Error', 'Both From and To times are required', 'error');
+                return aq;
+            }
+            if (!aq.newIntervalDays || !aq.newIntervalDays.length) {
+                this.showToast('Error', 'Select at least one day', 'error');
+                return aq;
+            }
+            const timeErr = this._validateTimeRange(aq.newIntervalFrom, aq.newIntervalTo, aq.slotDuration);
+            if (timeErr) {
+                this.showToast('Error', timeErr, 'error');
+                return aq;
+            }
             const newIv = {
                 fromTime: aq.newIntervalFrom, toTime: aq.newIntervalTo,
                 days: [...aq.newIntervalDays], key: formId + '-' + qid + '-iv-' + Date.now()
@@ -305,13 +361,17 @@ export default class JotformBlockoutManager extends LightningElement {
     handlePerFormAddBlockout(event) {
         const { formId, qid } = event.currentTarget.dataset;
         this.updateAppointment(formId, qid, aq => {
-            if (!aq.newStartDate || !aq.newEndDate) return aq;
+            if (!aq.newStartDate || !aq.newEndDate) {
+                this.showToast('Error', 'Both start and end dates are required', 'error');
+                return aq;
+            }
             if (aq.newEndDate < aq.newStartDate) {
                 this.showToast('Error', 'End date cannot be before start date', 'error');
                 return aq;
             }
-            if (aq.blockoutDates.some(d => d.startDate === aq.newStartDate && d.endDate === aq.newEndDate)) {
-                this.showToast('Info', 'This date range already exists', 'info');
+            const overlapMsg = this._validateBlockoutOverlap(aq.blockoutDates, aq.newStartDate, aq.newEndDate);
+            if (overlapMsg) {
+                this.showToast('Error', overlapMsg, 'error');
                 return aq;
             }
             const nd = {
@@ -376,10 +436,32 @@ export default class JotformBlockoutManager extends LightningElement {
 
     // ── Save ──────────────────────────────────────────────────
 
+    _validateBeforeSave(form) {
+        for (const aq of form.appointments) {
+            if (!aq.dirty) continue;
+            for (const iv of aq.intervals) {
+                const err = this._validateTimeRange(iv.fromTime, iv.toTime, aq.slotDuration);
+                if (err) {
+                    return form.formName + ' — ' + aq.text + ': ' + err;
+                }
+                if (!iv.days || iv.days.length === 0) {
+                    return form.formName + ' — ' + aq.text + ': Interval has no days selected';
+                }
+            }
+        }
+        return null;
+    }
+
     async handleSaveForm(event) {
         const formId = event.currentTarget.dataset.formId;
         const form = this.forms.find(f => f.formId === formId);
         if (!form) return;
+
+        const validationErr = this._validateBeforeSave(form);
+        if (validationErr) {
+            this.showToast('Error', validationErr, 'error');
+            return;
+        }
 
         const requests = [];
         for (const aq of form.appointments) {
@@ -419,6 +501,14 @@ export default class JotformBlockoutManager extends LightningElement {
     }
 
     async handleSave() {
+        for (const form of this.forms) {
+            const validationErr = this._validateBeforeSave(form);
+            if (validationErr) {
+                this.showToast('Error', validationErr, 'error');
+                return;
+            }
+        }
+
         const requests = [];
         for (const form of this.forms) {
             for (const aq of form.appointments) {

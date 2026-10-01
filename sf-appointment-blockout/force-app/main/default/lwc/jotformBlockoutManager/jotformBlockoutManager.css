@@ -6,3 +6,19 @@
 .slds-button_reset:hover {
     text-decoration: underline;
 }
+
+.delete-col {
+    width: 2.5rem;
+    max-width: 2.5rem;
+    text-align: center;
+}
+
+.add-row {
+    background-color: var(--lwc-colorBackgroundLight, #f4f6f9);
+    border: 1px dashed var(--lwc-colorBorder, #c9c9c9);
+    border-radius: 0.25rem;
+}
+
+.interval-row {
+    padding: 0.25rem 0;
+}
