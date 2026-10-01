@@ -1,12 +1,12 @@
 /* ── Component host ────────────────────────────────────── */
 :host {
-    --border-color: var(--slds-g-color-border-1, #c9c9c9);
+    --border-color: var(--slds-g-color-border-1, #d8dde6);
     --surface-primary: var(--slds-g-color-surface-1, #ffffff);
-    --surface-secondary: var(--slds-g-color-surface-2, #f3f3f3);
-    --text-secondary: var(--slds-g-color-on-surface-1, #5c5c5c);
-    --text-primary: var(--slds-g-color-on-surface-2, #2e2e2e);
-    --accent: var(--slds-g-color-accent-1, #0176d3);
-    --radius: var(--slds-g-radius-border-2, 0.5rem);
+    --surface-secondary: var(--slds-g-color-surface-2, #f4f6f9);
+    --text-secondary: var(--slds-g-color-on-surface-1, #706e6b);
+    --text-primary: var(--slds-g-color-on-surface-2, #3e3e3c);
+    --accent: var(--slds-g-color-accent-1, #0070d2);
+    --radius: var(--slds-g-radius-border-2, 0.25rem);
     --spacing-xs: var(--slds-g-spacing-1, 0.25rem);
     --spacing-sm: var(--slds-g-spacing-3, 0.75rem);
     --spacing-md: var(--slds-g-spacing-4, 1rem);
@@ -14,6 +14,8 @@
 
 /* ── Form row expand toggle ───────────────────────────── */
 .slds-button_reset {
+    display: block;
+    width: 100%;
     text-align: left;
     cursor: pointer;
     color: var(--text-primary);

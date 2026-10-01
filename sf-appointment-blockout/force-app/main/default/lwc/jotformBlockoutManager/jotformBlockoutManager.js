@@ -141,6 +141,21 @@ export default class JotformBlockoutManager extends LightningElement {
         return start1 <= end2 && start2 <= end1;
     }
 
+    _validateIntervalDayConflict(existingIntervals, newDays) {
+        const existingDaySet = new Set();
+        for (const iv of existingIntervals) {
+            for (const day of iv.days) {
+                existingDaySet.add(day);
+            }
+        }
+        const conflicts = newDays.filter(d => existingDaySet.has(d));
+        if (conflicts.length > 0) {
+            return 'These days already have intervals: ' + conflicts.join(', ')
+                + '. Uncheck them from the existing interval first, then add a new one.';
+        }
+        return null;
+    }
+
     _validateBlockoutOverlap(existingDates, newStart, newEnd) {
         for (const d of existingDates) {
             if (this._datesOverlap(newStart, newEnd, d.startDate, d.endDate)) {
@@ -239,9 +254,15 @@ export default class JotformBlockoutManager extends LightningElement {
             return;
         }
         const newIv = { fromTime: this.bulkIntervalFrom, toTime: this.bulkIntervalTo, days: [...this.bulkIntervalDays] };
+        let skippedConflict = 0;
         this.forms = this.forms.map(f => {
             if (!f.selected) return f;
             const appointments = f.appointments.map(aq => {
+                const dayConflict = this._validateIntervalDayConflict(aq.intervals, newIv.days);
+                if (dayConflict) {
+                    skippedConflict++;
+                    return aq;
+                }
                 const updated = [...aq.intervals, { ...newIv, key: f.formId + '-' + aq.qid + '-iv-' + Date.now() }];
                 return { ...aq, intervals: updated, dirty: true, dirtyFields: { ...aq.dirtyFields, intervals: true } };
             });
@@ -251,7 +272,11 @@ export default class JotformBlockoutManager extends LightningElement {
         this.bulkIntervalFrom = null;
         this.bulkIntervalTo = null;
         this.bulkIntervalDays = [];
-        this.showToast('Success', 'Interval added to selected forms', 'success');
+        if (skippedConflict > 0) {
+            this.showToast('Warning', 'Added to selected forms. ' + skippedConflict + ' skipped — days already have intervals. Uncheck those days from existing intervals first.', 'warning');
+        } else {
+            this.showToast('Success', 'Interval added to selected forms', 'success');
+        }
     }
 
     // ── Per-form settings ─────────────────────────────────────
@@ -337,6 +362,11 @@ export default class JotformBlockoutManager extends LightningElement {
             const timeErr = this._validateTimeRange(aq.newIntervalFrom, aq.newIntervalTo, aq.slotDuration);
             if (timeErr) {
                 this.showToast('Error', timeErr, 'error');
+                return aq;
+            }
+            const dayConflict = this._validateIntervalDayConflict(aq.intervals, aq.newIntervalDays);
+            if (dayConflict) {
+                this.showToast('Error', dayConflict, 'error');
                 return aq;
             }
             const newIv = {
