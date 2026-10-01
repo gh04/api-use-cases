@@ -88,7 +88,7 @@ export default class JotformBlockoutManager extends LightningElement {
                     ? d.startDate
                     : d.startDate + ' → ' + d.endDate
             })),
-            availableDayOptions: this._buildAvailableDayOptions(aq.intervals || []),
+            newIntervalDayChecks: this._buildNewIntervalDayChecks(aq.intervals || [], []),
             newStartDate: null,
             newEndDate: null,
             newIntervalFrom: null,
@@ -99,16 +99,20 @@ export default class JotformBlockoutManager extends LightningElement {
         };
     }
 
-    _buildAvailableDayOptions(intervals) {
+    _buildNewIntervalDayChecks(intervals, selectedDays) {
         const usedDays = new Set();
         for (const iv of intervals) {
             for (const d of (iv.days || [])) {
                 usedDays.add(d);
             }
         }
-        return DAY_OPTIONS.map(opt => ({
-            ...opt,
-            disabled: usedDays.has(opt.value)
+        const selected = new Set(selectedDays || []);
+        return ALL_DAYS.map(d => ({
+            label: d,
+            value: d,
+            disabled: usedDays.has(d),
+            checked: selected.has(d),
+            key: 'newiv-day-' + d
         }));
     }
 
@@ -278,7 +282,7 @@ export default class JotformBlockoutManager extends LightningElement {
                     return aq;
                 }
                 const updatedIntervals = [...aq.intervals, { ...newIv, key: f.formId + '-' + aq.qid + '-iv-' + Date.now() }];
-                return { ...aq, intervals: updatedIntervals, availableDayOptions: this._buildAvailableDayOptions(updatedIntervals), dirty: true, dirtyFields: { ...aq.dirtyFields, intervals: true } };
+                return { ...aq, intervals: updatedIntervals, newIntervalDayChecks: this._buildNewIntervalDayChecks(updatedIntervals, aq.newIntervalDays), dirty: true, dirtyFields: { ...aq.dirtyFields, intervals: true } };
             });
             const hasDirty = appointments.some(aq => aq.dirty);
             return { ...f, appointments, hasDirty, cardClass: hasDirty ? 'form-card form-card-dirty' : 'form-card' };
@@ -357,9 +361,18 @@ export default class JotformBlockoutManager extends LightningElement {
         this.updateAppointment(formId, qid, aq => ({ ...aq, newIntervalTo: event.target.value }));
     }
 
-    handlePerFormIntervalDays(event) {
-        const { formId, qid } = event.currentTarget.dataset;
-        this.updateAppointment(formId, qid, aq => ({ ...aq, newIntervalDays: event.detail.value }));
+    handleNewIntervalDayToggle(event) {
+        const { formId, qid, dayValue } = event.currentTarget.dataset;
+        const isChecked = event.target.checked;
+        this.updateAppointment(formId, qid, aq => {
+            let days = [...(aq.newIntervalDays || [])];
+            if (isChecked) {
+                if (!days.includes(dayValue)) days.push(dayValue);
+            } else {
+                days = days.filter(d => d !== dayValue);
+            }
+            return { ...aq, newIntervalDays: days };
+        });
     }
 
     handlePerFormAddInterval(event) {
@@ -450,9 +463,7 @@ export default class JotformBlockoutManager extends LightningElement {
             const appointments = f.appointments.map(aq => {
                 if (aq.qid !== qid) return aq;
                 const updated = updater(aq);
-                if (updated.intervals !== aq.intervals) {
-                    updated.availableDayOptions = this._buildAvailableDayOptions(updated.intervals);
-                }
+                updated.newIntervalDayChecks = this._buildNewIntervalDayChecks(updated.intervals, updated.newIntervalDays);
                 return updated;
             });
             const hasDirty = appointments.some(aq => aq.dirty);

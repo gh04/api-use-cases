@@ -213,9 +213,19 @@
                                                     field-level-help="Must be after From and span at least the slot duration"></lightning-input>
                                             </div>
                                             <div class="slds-col slds-size_6-of-12">
-                                                <lightning-checkbox-group label="Days" options={aq.availableDayOptions} value={aq.newIntervalDays}
-                                                    data-form-id={form.formId} data-qid={aq.qid}
-                                                    onchange={handlePerFormIntervalDays}></lightning-checkbox-group>
+                                                <fieldset class="slds-form-element">
+                                                    <legend class="slds-form-element__legend slds-form-element__label">Days</legend>
+                                                    <div class="slds-form-element__control">
+                                                        <template for:each={aq.newIntervalDayChecks} for:item="dayOpt">
+                                                            <lightning-input key={dayOpt.key} type="checkbox"
+                                                                label={dayOpt.label}
+                                                                checked={dayOpt.checked}
+                                                                disabled={dayOpt.disabled}
+                                                                data-form-id={form.formId} data-qid={aq.qid} data-day-value={dayOpt.value}
+                                                                onchange={handleNewIntervalDayToggle}></lightning-input>
+                                                        </template>
+                                                    </div>
+                                                </fieldset>
                                             </div>
                                             <div class="slds-col slds-size_2-of-12">
                                                 <lightning-button label="Add" icon-name="utility:add" variant="neutral"
