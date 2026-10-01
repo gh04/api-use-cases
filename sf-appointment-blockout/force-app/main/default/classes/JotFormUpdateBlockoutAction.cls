@@ -22,12 +22,10 @@ public with sharing class JotFormUpdateBlockoutAction {
         for (UpdateBlockoutRequest req : requests) {
             UpdateBlockoutResult result = new UpdateBlockoutResult();
             try {
-                List<JotFormService.BlockoutDate> dates =
-                    (List<JotFormService.BlockoutDate>) JSON.deserialize(
-                        req.blockoutDatesJson,
-                        List<JotFormService.BlockoutDate>.class
-                    );
-                JotFormService.updateBlockoutDates(req.formId, req.questionId, dates);
+                Map<String, String> properties = new Map<String, String>{
+                    'blockoutDates' => req.blockoutDatesJson
+                };
+                JotFormService.updateQuestionProperties(req.formId, req.questionId, properties);
                 result.success = true;
             } catch (Exception e) {
                 result.errorMessage = e.getMessage();
