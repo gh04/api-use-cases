@@ -1,0 +1,252 @@
+<template>
+    <lightning-card title="JotForm Blockout Date Manager" icon-name="standard:date_input">
+
+        <!-- Toolbar -->
+        <div slot="actions">
+            <lightning-button
+                label="Refresh"
+                icon-name="utility:refresh"
+                onclick={handleRefresh}
+                disabled={isLoading}
+            ></lightning-button>
+            <lightning-button
+                variant="brand"
+                label="Save Changes"
+                icon-name="utility:save"
+                onclick={handleSave}
+                disabled={saveDisabled}
+                class="slds-m-left_x-small"
+            ></lightning-button>
+        </div>
+
+        <!-- Loading -->
+        <template if:true={isLoading}>
+            <div class="slds-p-around_large slds-align_absolute-center">
+                <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+            </div>
+        </template>
+
+        <!-- Error -->
+        <template if:true={error}>
+            <div class="slds-p-around_medium">
+                <div class="slds-notify slds-notify_alert slds-alert_error" role="alert">
+                    <span class="slds-assistive-text">Error</span>
+                    <h2>{error}</h2>
+                </div>
+            </div>
+        </template>
+
+        <!-- No forms -->
+        <template if:true={hasNoForms}>
+            <div class="slds-p-around_large slds-align_absolute-center">
+                <p class="slds-text-body_regular slds-text-color_weak">
+                    No forms with appointment widgets found.
+                </p>
+            </div>
+        </template>
+
+        <!-- Content -->
+        <template if:true={hasForms}>
+            <div class="slds-p-around_medium">
+
+                <!-- Bulk Actions -->
+                <div class="slds-box slds-m-bottom_medium slds-theme_shade">
+                    <h3 class="slds-text-heading_small slds-m-bottom_small">Bulk Actions</h3>
+                    <div class="slds-grid slds-gutters slds-wrap slds-grid_vertical-align-end">
+                        <div class="slds-col slds-size_1-of-1 slds-m-bottom_small">
+                            <lightning-input
+                                type="checkbox"
+                                label="Select All Forms"
+                                checked={allSelected}
+                                onchange={handleSelectAll}
+                            ></lightning-input>
+                            <template if:true={hasSelectedForms}>
+                                <span class="slds-badge slds-m-left_small">
+                                    {selectedCount} selected
+                                </span>
+                            </template>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4">
+                            <lightning-input
+                                type="date"
+                                label="Start Date"
+                                value={bulkStartDate}
+                                onchange={handleBulkStartDate}
+                            ></lightning-input>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4">
+                            <lightning-input
+                                type="date"
+                                label="End Date"
+                                value={bulkEndDate}
+                                onchange={handleBulkEndDate}
+                            ></lightning-input>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4">
+                            <lightning-button
+                                label="Add to Selected"
+                                icon-name="utility:add"
+                                onclick={handleBulkAdd}
+                                disabled={bulkAddDisabled}
+                            ></lightning-button>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4">
+                            <lightning-button
+                                label="Clear All on Selected"
+                                icon-name="utility:delete"
+                                variant="destructive-text"
+                                onclick={handleBulkClear}
+                                disabled={bulkClearDisabled}
+                            ></lightning-button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form List -->
+                <template for:each={forms} for:item="form">
+                    <div key={form.formId} class="slds-box slds-m-bottom_small">
+
+                        <!-- Form Header -->
+                        <div class="slds-grid slds-grid_vertical-align-center slds-p-bottom_small">
+                            <div class="slds-col slds-size_1-of-12">
+                                <lightning-input
+                                    type="checkbox"
+                                    checked={form.selected}
+                                    data-form-id={form.formId}
+                                    onchange={handleFormSelect}
+                                    variant="label-hidden"
+                                    label="Select form"
+                                ></lightning-input>
+                            </div>
+                            <div class="slds-col slds-size_9-of-12 slds-p-left_small">
+                                <button
+                                    class="slds-button slds-button_reset slds-text-heading_small"
+                                    data-form-id={form.formId}
+                                    onclick={handleToggleExpand}
+                                >
+                                    <lightning-icon
+                                        icon-name={form.expanded ? 'utility:chevrondown' : 'utility:chevronright'}
+                                        size="x-small"
+                                        class="slds-m-right_x-small"
+                                    ></lightning-icon>
+                                    {form.formName}
+                                </button>
+                                <span class="slds-text-body_small slds-text-color_weak slds-m-left_small">
+                                    ID: {form.formId}
+                                </span>
+                            </div>
+                            <div class="slds-col slds-size_2-of-12 slds-text-align_right">
+                                <template for:each={form.appointments} for:item="aq">
+                                    <span key={aq.key}>
+                                        <span class="slds-badge">
+                                            {aq.blockoutDates.length} date(s)
+                                        </span>
+                                        <template if:true={aq.dirty}>
+                                            <span class="slds-badge slds-badge_inverse slds-m-left_xx-small">
+                                                Modified
+                                            </span>
+                                        </template>
+                                    </span>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Form Error -->
+                        <template if:true={form.errorMessage}>
+                            <div class="slds-text-color_error slds-p-left_large">
+                                Error loading: {form.errorMessage}
+                            </div>
+                        </template>
+
+                        <!-- Expanded Detail -->
+                        <template if:true={form.expanded}>
+                            <template for:each={form.appointments} for:item="aq">
+                                <div key={aq.key} class="slds-p-left_large slds-p-top_small slds-border_top">
+                                    <p class="slds-text-title_caps slds-m-bottom_x-small">{aq.text}</p>
+
+                                    <!-- Current Blockout Dates -->
+                                    <template if:true={aq.blockoutDates.length}>
+                                        <table class="slds-table slds-table_bordered slds-table_cell-buffer slds-m-bottom_small">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">Start Date</th>
+                                                    <th scope="col">End Date</th>
+                                                    <th scope="col" class="slds-cell-shrink"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template for:each={aq.blockoutDates} for:item="bd">
+                                                    <tr key={bd.key}>
+                                                        <td>{bd.startDate}</td>
+                                                        <td>{bd.endDate}</td>
+                                                        <td>
+                                                            <lightning-button-icon
+                                                                icon-name="utility:delete"
+                                                                alternative-text="Remove"
+                                                                variant="bare"
+                                                                size="small"
+                                                                data-form-id={form.formId}
+                                                                data-qid={aq.qid}
+                                                                data-date-key={bd.key}
+                                                                onclick={handleRemoveDate}
+                                                            ></lightning-button-icon>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </template>
+
+                                    <template if:false={aq.blockoutDates.length}>
+                                        <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">
+                                            No blockout dates set.
+                                        </p>
+                                    </template>
+
+                                    <!-- Per-form Add -->
+                                    <div class="slds-grid slds-gutters slds-grid_vertical-align-end slds-m-bottom_small">
+                                        <div class="slds-col slds-size_1-of-3">
+                                            <lightning-input
+                                                type="date"
+                                                label="Start Date"
+                                                value={aq.newStartDate}
+                                                data-form-id={form.formId}
+                                                data-qid={aq.qid}
+                                                onchange={handlePerFormStartDate}
+                                            ></lightning-input>
+                                        </div>
+                                        <div class="slds-col slds-size_1-of-3">
+                                            <lightning-input
+                                                type="date"
+                                                label="End Date"
+                                                value={aq.newEndDate}
+                                                data-form-id={form.formId}
+                                                data-qid={aq.qid}
+                                                onchange={handlePerFormEndDate}
+                                            ></lightning-input>
+                                        </div>
+                                        <div class="slds-col slds-size_1-of-3">
+                                            <lightning-button
+                                                label="Add"
+                                                icon-name="utility:add"
+                                                data-form-id={form.formId}
+                                                data-qid={aq.qid}
+                                                onclick={handlePerFormAdd}
+                                            ></lightning-button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- Saving overlay -->
+        <template if:true={isSaving}>
+            <lightning-spinner alternative-text="Saving" size="medium"></lightning-spinner>
+        </template>
+
+    </lightning-card>
+</template>

@@ -1,0 +1,8 @@
+.slds-button_reset {
+    text-align: left;
+    cursor: pointer;
+}
+
+.slds-button_reset:hover {
+    text-decoration: underline;
+}

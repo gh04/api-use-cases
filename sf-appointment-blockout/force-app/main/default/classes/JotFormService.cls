@@ -23,6 +23,28 @@ public with sharing class JotFormService {
         @AuraEnabled public List<BlockoutDate> blockoutDates;
     }
 
+    public class FormAppointmentData {
+        @AuraEnabled public String formId;
+        @AuraEnabled public String formName;
+        @AuraEnabled public List<AppointmentQuestion> appointments;
+        @AuraEnabled public String errorMessage;
+    }
+
+    public class BulkUpdateRequest {
+        @AuraEnabled public String formId;
+        @AuraEnabled public String questionId;
+        @AuraEnabled public List<BlockoutDate> dates;
+    }
+
+    public class BulkUpdateResult {
+        @AuraEnabled public String formId;
+        @AuraEnabled public String questionId;
+        @AuraEnabled public Boolean success;
+        @AuraEnabled public String errorMessage;
+    }
+
+    // ── HTTP layer ────────────────────────────────────────────────
+
     private static HttpResponse sendRequest(String method, String path) {
         return sendRequest(method, path, null);
     }
@@ -51,6 +73,8 @@ public with sharing class JotFormService {
         }
         return res;
     }
+
+    // ── Core methods ──────────────────────────────────────────────
 
     public static List<AppointmentQuestion> getAppointmentQuestions(String formId) {
         HttpResponse res = sendRequest('GET', '/v1/form/' + formId + '/questions');
@@ -98,6 +122,57 @@ public with sharing class JotFormService {
         String body = 'question[blockoutDates]=' + EncodingUtil.urlEncode(jsonDates, 'UTF-8');
         sendRequest('POST', '/v1/form/' + formId + '/question/' + questionId, body);
     }
+
+    // ── AuraEnabled methods for LWC ───────────────────────────────
+
+    @AuraEnabled
+    public static List<FormAppointmentData> loadAllFormsWithAppointments() {
+        List<Forms__c> sfForms = [
+            SELECT Form_ID__c, Name
+            FROM Forms__c
+            WHERE Status__c = 'Enabled'
+            ORDER BY Name
+        ];
+
+        List<FormAppointmentData> results = new List<FormAppointmentData>();
+        for (Forms__c sf : sfForms) {
+            FormAppointmentData data = new FormAppointmentData();
+            data.formId = sf.Form_ID__c;
+            data.formName = sf.Name;
+            try {
+                data.appointments = getAppointmentQuestions(sf.Form_ID__c);
+            } catch (Exception e) {
+                data.appointments = new List<AppointmentQuestion>();
+                data.errorMessage = e.getMessage();
+            }
+            results.add(data);
+        }
+        return results;
+    }
+
+    @AuraEnabled
+    public static List<BulkUpdateResult> bulkUpdateBlockoutDates(String requestsJson) {
+        List<BulkUpdateRequest> requests = (List<BulkUpdateRequest>) JSON.deserialize(
+            requestsJson, List<BulkUpdateRequest>.class
+        );
+        List<BulkUpdateResult> results = new List<BulkUpdateResult>();
+        for (BulkUpdateRequest req : requests) {
+            BulkUpdateResult result = new BulkUpdateResult();
+            result.formId = req.formId;
+            result.questionId = req.questionId;
+            try {
+                updateBlockoutDates(req.formId, req.questionId, req.dates);
+                result.success = true;
+            } catch (Exception e) {
+                result.success = false;
+                result.errorMessage = e.getMessage();
+            }
+            results.add(result);
+        }
+        return results;
+    }
+
+    // ── Private helpers ───────────────────────────────────────────
 
     private static List<BlockoutDate> parseBlockoutDates(String raw) {
         List<BlockoutDate> dates = new List<BlockoutDate>();
