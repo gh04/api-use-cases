@@ -23,33 +23,39 @@ export default class JotformBlockoutManager extends LightningElement {
             const data = await loadAllFormsWithAppointments();
             this.forms = data
                 .filter(f => f.appointments && f.appointments.length > 0)
-                .map(f => ({
-                    formId: f.formId,
-                    formName: f.formName,
-                    errorMessage: f.errorMessage,
-                    selected: false,
-                    expanded: false,
-                    appointments: f.appointments.map(aq => ({
-                        qid: aq.qid,
-                        key: f.formId + '-' + aq.qid,
-                        name: aq.name,
-                        text: aq.text,
-                        blockoutDates: (aq.blockoutDates || []).map((d, idx) => ({
-                            ...d,
-                            key: f.formId + '-' + aq.qid + '-' + idx,
-                            label: d.startDate === d.endDate
-                                ? d.startDate
-                                : d.startDate + ' → ' + d.endDate
-                        })),
-                        newStartDate: null,
-                        newEndDate: null,
-                        dirty: false
-                    }))
-                }));
+                .map(f => this.buildFormEntry(f));
         } catch (e) {
             this.error = this.extractError(e);
         }
         this.isLoading = false;
+    }
+
+    buildFormEntry(f) {
+        return {
+            formId: f.formId,
+            formName: f.formName,
+            errorMessage: f.errorMessage,
+            selected: false,
+            expanded: false,
+            expandIcon: 'utility:chevronright',
+            appointments: f.appointments.map(aq => ({
+                qid: aq.qid,
+                key: f.formId + '-' + aq.qid,
+                name: aq.name,
+                text: aq.text,
+                blockoutDates: (aq.blockoutDates || []).map((d, idx) => ({
+                    startDate: d.startDate,
+                    endDate: d.endDate,
+                    key: f.formId + '-' + aq.qid + '-' + idx,
+                    label: d.startDate === d.endDate
+                        ? d.startDate
+                        : d.startDate + ' → ' + d.endDate
+                })),
+                newStartDate: null,
+                newEndDate: null,
+                dirty: false
+            }))
+        };
     }
 
     // ── Computed properties ───────────────────────────────────
@@ -102,9 +108,15 @@ export default class JotformBlockoutManager extends LightningElement {
 
     handleToggleExpand(event) {
         const formId = event.currentTarget.dataset.formId;
-        this.forms = this.forms.map(f =>
-            f.formId === formId ? { ...f, expanded: !f.expanded } : f
-        );
+        this.forms = this.forms.map(f => {
+            if (f.formId !== formId) return f;
+            const nowExpanded = !f.expanded;
+            return {
+                ...f,
+                expanded: nowExpanded,
+                expandIcon: nowExpanded ? 'utility:chevrondown' : 'utility:chevronright'
+            };
+        });
     }
 
     // ── Bulk actions ──────────────────────────────────────────
@@ -140,7 +152,8 @@ export default class JotformBlockoutManager extends LightningElement {
                     if (exists) return aq;
 
                     const updated = [...aq.blockoutDates, {
-                        ...newDate,
+                        startDate: newDate.startDate,
+                        endDate: newDate.endDate,
                         key: f.formId + '-' + aq.qid + '-' + Date.now(),
                         label: newDate.startDate === newDate.endDate
                             ? newDate.startDate

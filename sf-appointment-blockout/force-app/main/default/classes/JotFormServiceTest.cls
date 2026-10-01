@@ -110,7 +110,7 @@ private class JotFormServiceTest {
 
     @isTest
     static void testLoadAllFormsWithAppointments() {
-        Forms__c testForm = new Forms__c(
+        Form__c testForm = new Form__c(
             Name = 'Test Form',
             Form_ID__c = '999999999',
             Status__c = 'Enabled'
@@ -131,7 +131,7 @@ private class JotFormServiceTest {
 
     @isTest
     static void testLoadAllFormsWithApiError() {
-        Forms__c testForm = new Forms__c(
+        Form__c testForm = new Form__c(
             Name = 'Bad Form',
             Form_ID__c = '000000000',
             Status__c = 'Enabled'

@@ -127,20 +127,15 @@ public with sharing class JotFormService {
 
     @AuraEnabled
     public static List<FormAppointmentData> loadAllFormsWithAppointments() {
-        List<Forms__c> sfForms = [
-            SELECT Form_ID__c, Name
-            FROM Forms__c
-            WHERE Status__c = 'Enabled'
-            ORDER BY Name
-        ];
+        List<Map<String, String>> formRecords = getFormRecords();
 
         List<FormAppointmentData> results = new List<FormAppointmentData>();
-        for (Forms__c sf : sfForms) {
+        for (Map<String, String> rec : formRecords) {
             FormAppointmentData data = new FormAppointmentData();
-            data.formId = sf.Form_ID__c;
-            data.formName = sf.Name;
+            data.formId = rec.get('formId');
+            data.formName = rec.get('formName');
             try {
-                data.appointments = getAppointmentQuestions(sf.Form_ID__c);
+                data.appointments = getAppointmentQuestions(data.formId);
             } catch (Exception e) {
                 data.appointments = new List<AppointmentQuestion>();
                 data.errorMessage = e.getMessage();
@@ -148,6 +143,19 @@ public with sharing class JotFormService {
             results.add(data);
         }
         return results;
+    }
+
+    private static List<Map<String, String>> getFormRecords() {
+        List<Map<String, String>> records = new List<Map<String, String>>();
+        for (SObject obj : Database.query(
+            'SELECT Form_ID__c, Name FROM Form__c WHERE Status__c = \'Enabled\' ORDER BY Name'
+        )) {
+            Map<String, String> rec = new Map<String, String>();
+            rec.put('formId', (String) obj.get('Form_ID__c'));
+            rec.put('formName', (String) obj.get('Name'));
+            records.add(rec);
+        }
+        return records;
     }
 
     @AuraEnabled
