@@ -16,6 +16,8 @@ export default class JotformBlockoutManager extends LightningElement {
     @track error;
     @track isSaving = false;
 
+    _cachedData = [];
+
     dayOptions = DAY_OPTIONS;
     typeOptions = TYPE_OPTIONS;
 
@@ -35,9 +37,9 @@ export default class JotformBlockoutManager extends LightningElement {
         this.error = undefined;
         try {
             const data = await loadAllFormsWithAppointments();
-            this.forms = data
-                .filter(f => f.appointments && f.appointments.length > 0)
-                .map(f => this.buildFormEntry(f));
+            const filtered = data.filter(f => f.appointments && f.appointments.length > 0);
+            this._cachedData = JSON.parse(JSON.stringify(filtered));
+            this.forms = filtered.map(f => this.buildFormEntry(f));
         } catch (e) {
             this.error = this.extractError(e);
         }
@@ -45,6 +47,7 @@ export default class JotformBlockoutManager extends LightningElement {
     }
 
     buildFormEntry(f) {
+        const appointments = f.appointments.map(aq => this.buildAppointmentEntry(f.formId, aq));
         return {
             formId: f.formId,
             formName: f.formName,
@@ -52,7 +55,8 @@ export default class JotformBlockoutManager extends LightningElement {
             selected: false,
             expanded: false,
             expandIcon: 'utility:chevronright',
-            appointments: f.appointments.map(aq => this.buildAppointmentEntry(f.formId, aq))
+            hasDirty: appointments.some(aq => aq.dirty),
+            appointments
         };
     }
 
@@ -118,6 +122,7 @@ export default class JotformBlockoutManager extends LightningElement {
         return !this.bulkIntervalFrom || !this.bulkIntervalTo || !this.bulkIntervalDays.length || !this.hasSelectedForms || this.isSaving;
     }
     get saveDisabled() { return this.isSaving || !this.forms.some(f => f.appointments.some(aq => aq.dirty)); }
+    get undoDisabled() { return this.isSaving || !this.forms.some(f => f.appointments.some(aq => aq.dirty)); }
 
     // ── Selection ─────────────────────────────────────────────
 
@@ -156,14 +161,15 @@ export default class JotformBlockoutManager extends LightningElement {
         const nd = { startDate: this.bulkStartDate, endDate: this.bulkEndDate };
         this.forms = this.forms.map(f => {
             if (!f.selected) return f;
-            return { ...f, appointments: f.appointments.map(aq => {
+            const appointments = f.appointments.map(aq => {
                 if (aq.blockoutDates.some(d => d.startDate === nd.startDate && d.endDate === nd.endDate)) return aq;
                 const updated = [...aq.blockoutDates, {
                     ...nd, key: f.formId + '-' + aq.qid + '-bd-' + Date.now(),
                     label: nd.startDate === nd.endDate ? nd.startDate : nd.startDate + ' → ' + nd.endDate
                 }];
                 return { ...aq, blockoutDates: updated, dirty: true, dirtyFields: { ...aq.dirtyFields, blockoutDates: true } };
-            })};
+            });
+            return { ...f, appointments, hasDirty: appointments.some(aq => aq.dirty) };
         });
         this.bulkStartDate = null;
         this.bulkEndDate = null;
@@ -173,10 +179,11 @@ export default class JotformBlockoutManager extends LightningElement {
     handleBulkClearBlockout() {
         this.forms = this.forms.map(f => {
             if (!f.selected) return f;
-            return { ...f, appointments: f.appointments.map(aq => {
+            const appointments = f.appointments.map(aq => {
                 if (aq.blockoutDates.length === 0) return aq;
                 return { ...aq, blockoutDates: [], dirty: true, dirtyFields: { ...aq.dirtyFields, blockoutDates: true } };
-            })};
+            });
+            return { ...f, appointments, hasDirty: appointments.some(aq => aq.dirty) };
         });
         this.showToast('Success', 'Blockout dates cleared on selected forms', 'success');
     }
@@ -192,10 +199,11 @@ export default class JotformBlockoutManager extends LightningElement {
         const newIv = { fromTime: this.bulkIntervalFrom, toTime: this.bulkIntervalTo, days: [...this.bulkIntervalDays] };
         this.forms = this.forms.map(f => {
             if (!f.selected) return f;
-            return { ...f, appointments: f.appointments.map(aq => {
+            const appointments = f.appointments.map(aq => {
                 const updated = [...aq.intervals, { ...newIv, key: f.formId + '-' + aq.qid + '-iv-' + Date.now() }];
                 return { ...aq, intervals: updated, dirty: true, dirtyFields: { ...aq.dirtyFields, intervals: true } };
-            })};
+            });
+            return { ...f, appointments, hasDirty: appointments.some(aq => aq.dirty) };
         });
         this.bulkIntervalFrom = null;
         this.bulkIntervalTo = null;
@@ -330,37 +338,92 @@ export default class JotformBlockoutManager extends LightningElement {
     updateAppointment(formId, qid, updater) {
         this.forms = this.forms.map(f => {
             if (f.formId !== formId) return f;
-            return { ...f, appointments: f.appointments.map(aq => aq.qid !== qid ? aq : updater(aq)) };
+            const appointments = f.appointments.map(aq => aq.qid !== qid ? aq : updater(aq));
+            return { ...f, appointments, hasDirty: appointments.some(aq => aq.dirty) };
         });
     }
 
+    // ── Undo ──────────────────────────────────────────────────
+
+    handleUndo() {
+        this.forms = this._cachedData.map(f => {
+            const current = this.forms.find(cf => cf.formId === f.formId);
+            const entry = this.buildFormEntry(f);
+            if (current) {
+                entry.selected = current.selected;
+                entry.expanded = current.expanded;
+                entry.expandIcon = current.expandIcon;
+            }
+            return entry;
+        });
+        this.showToast('Info', 'All changes reverted', 'info');
+    }
+
+    handleUndoForm(event) {
+        const formId = event.currentTarget.dataset.formId;
+        const cached = this._cachedData.find(f => f.formId === formId);
+        if (!cached) return;
+        this.forms = this.forms.map(f => {
+            if (f.formId !== formId) return f;
+            const entry = this.buildFormEntry(cached);
+            entry.selected = f.selected;
+            entry.expanded = f.expanded;
+            entry.expandIcon = f.expandIcon;
+            return entry;
+        });
+        this.showToast('Info', 'Changes reverted for this form', 'info');
+    }
+
     // ── Save ──────────────────────────────────────────────────
+
+    async handleSaveForm(event) {
+        const formId = event.currentTarget.dataset.formId;
+        const form = this.forms.find(f => f.formId === formId);
+        if (!form) return;
+
+        const requests = [];
+        for (const aq of form.appointments) {
+            if (!aq.dirty) continue;
+            const properties = this._buildProperties(aq);
+            requests.push({ formId: form.formId, questionId: aq.qid, properties });
+        }
+
+        if (requests.length === 0) {
+            this.showToast('Info', 'No changes to save', 'info');
+            return;
+        }
+
+        this.isSaving = true;
+        try {
+            const results = await bulkUpdateAppointments({ requestsJson: JSON.stringify(requests) });
+            let failCount = 0;
+            const errors = [];
+            for (const r of results) {
+                if (r.success) {
+                    this.updateAppointment(r.formId, r.questionId, aq => ({ ...aq, dirty: false, dirtyFields: {} }));
+                } else {
+                    failCount++;
+                    errors.push(r.errorMessage);
+                }
+            }
+            if (failCount === 0) {
+                this._updateCache(formId);
+                this.showToast('Success', 'Form updated successfully', 'success');
+            } else {
+                this.showToast('Warning', failCount + ' failed: ' + errors.join('; '), 'warning');
+            }
+        } catch (e) {
+            this.showToast('Error', this.extractError(e), 'error');
+        }
+        this.isSaving = false;
+    }
 
     async handleSave() {
         const requests = [];
         for (const form of this.forms) {
             for (const aq of form.appointments) {
                 if (!aq.dirty) continue;
-                const properties = {};
-                const df = aq.dirtyFields;
-
-                if (df.blockoutDates) {
-                    properties.blockoutDates = JSON.stringify(
-                        aq.blockoutDates.map(d => ({ startDate: d.startDate, endDate: d.endDate }))
-                    );
-                }
-                if (df.intervals) {
-                    properties.intervals = JSON.stringify(
-                        aq.intervals.map(iv => ({ from: iv.fromTime, to: iv.toTime, days: iv.days }))
-                    );
-                }
-                if (df.appointmentType) properties.appointmentType = aq.appointmentType;
-                if (df.slotDuration) properties.slotDuration = aq.slotDuration;
-                if (df.maxAttendee) properties.maxAttendee = aq.maxAttendee;
-                if (df.rollingDays) properties.rollingDays = aq.rollingDays;
-                if (df.minScheduleNotice) properties.minScheduleNotice = aq.minScheduleNotice;
-
-                requests.push({ formId: form.formId, questionId: aq.qid, properties });
+                requests.push({ formId: form.formId, questionId: aq.qid, properties: this._buildProperties(aq) });
             }
         }
 
@@ -387,6 +450,7 @@ export default class JotformBlockoutManager extends LightningElement {
             }
 
             if (failCount === 0) {
+                this._updateCacheAll();
                 this.showToast('Success', successCount + ' form(s) updated successfully', 'success');
             } else {
                 this.showToast('Warning', successCount + ' succeeded, ' + failCount + ' failed: ' + errors.join('; '), 'warning');
@@ -400,6 +464,56 @@ export default class JotformBlockoutManager extends LightningElement {
     async handleRefresh() {
         await this.loadForms();
         this.showToast('Success', 'Forms reloaded', 'success');
+    }
+
+    _buildProperties(aq) {
+        const properties = {};
+        const df = aq.dirtyFields;
+        if (df.blockoutDates) {
+            properties.blockoutDates = JSON.stringify(
+                aq.blockoutDates.map(d => ({ startDate: d.startDate, endDate: d.endDate }))
+            );
+        }
+        if (df.intervals) {
+            properties.intervals = JSON.stringify(
+                aq.intervals.map(iv => ({ from: iv.fromTime, to: iv.toTime, days: iv.days }))
+            );
+        }
+        if (df.appointmentType) properties.appointmentType = aq.appointmentType;
+        if (df.slotDuration) properties.slotDuration = aq.slotDuration;
+        if (df.maxAttendee) properties.maxAttendee = aq.maxAttendee;
+        if (df.rollingDays) properties.rollingDays = aq.rollingDays;
+        if (df.minScheduleNotice) properties.minScheduleNotice = aq.minScheduleNotice;
+        return properties;
+    }
+
+    _formToCache(form) {
+        return {
+            formId: form.formId,
+            formName: form.formName,
+            errorMessage: form.errorMessage,
+            appointments: form.appointments.map(aq => ({
+                qid: aq.qid, name: aq.name, text: aq.text,
+                appointmentType: aq.appointmentType, slotDuration: aq.slotDuration,
+                maxAttendee: aq.maxAttendee, rollingDays: aq.rollingDays,
+                minScheduleNotice: aq.minScheduleNotice,
+                intervals: aq.intervals.map(iv => ({ fromTime: iv.fromTime, toTime: iv.toTime, days: [...iv.days] })),
+                blockoutDates: aq.blockoutDates.map(d => ({ startDate: d.startDate, endDate: d.endDate }))
+            }))
+        };
+    }
+
+    _updateCache(formId) {
+        const form = this.forms.find(f => f.formId === formId);
+        if (!form) return;
+        const idx = this._cachedData.findIndex(f => f.formId === formId);
+        if (idx >= 0) {
+            this._cachedData[idx] = this._formToCache(form);
+        }
+    }
+
+    _updateCacheAll() {
+        this._cachedData = this.forms.map(f => this._formToCache(f));
     }
 
     showToast(title, message, variant) {

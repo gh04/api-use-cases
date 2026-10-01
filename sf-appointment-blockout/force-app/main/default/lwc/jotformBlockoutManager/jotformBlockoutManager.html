@@ -3,7 +3,8 @@
 
         <div slot="actions">
             <lightning-button label="Refresh" icon-name="utility:refresh" onclick={handleRefresh} disabled={isLoading}></lightning-button>
-            <lightning-button variant="brand" label="Save Changes" icon-name="utility:save" onclick={handleSave} disabled={saveDisabled} class="slds-m-left_x-small"></lightning-button>
+            <lightning-button label="Undo All" icon-name="utility:undo" onclick={handleUndo} disabled={undoDisabled} class="slds-m-left_x-small"></lightning-button>
+            <lightning-button variant="brand" label="Save All" icon-name="utility:save" onclick={handleSave} disabled={saveDisabled} class="slds-m-left_x-small"></lightning-button>
         </div>
 
         <!-- Loading -->
@@ -118,7 +119,9 @@
                         <template if:true={form.expanded}>
                             <template for:each={form.appointments} for:item="aq">
                                 <div key={aq.key} class="slds-p-left_large slds-p-top_small slds-border_top">
-                                    <p class="slds-text-title_caps slds-m-bottom_small">{aq.text}</p>
+                                    <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small">
+                                        <p class="slds-text-title_caps slds-col">{aq.text}</p>
+                                    </div>
 
                                     <!-- Settings row -->
                                     <div class="slds-grid slds-gutters slds-wrap slds-m-bottom_medium">
@@ -255,6 +258,14 @@
                                     </div>
                                 </div>
                             </template>
+
+                            <!-- Per-form actions -->
+                            <div class="slds-border_top slds-p-top_small slds-p-left_large slds-text-align_right">
+                                <lightning-button label="Undo" icon-name="utility:undo" data-form-id={form.formId}
+                                    onclick={handleUndoForm} disabled={isSaving}></lightning-button>
+                                <lightning-button variant="brand" label="Save" icon-name="utility:save" data-form-id={form.formId}
+                                    onclick={handleSaveForm} disabled={isSaving} class="slds-m-left_x-small"></lightning-button>
+                            </div>
                         </template>
                     </div>
                 </template>
