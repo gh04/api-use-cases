@@ -88,6 +88,7 @@ export default class JotformBlockoutManager extends LightningElement {
                     ? d.startDate
                     : d.startDate + ' → ' + d.endDate
             })),
+            availableDayOptions: this._buildAvailableDayOptions(aq.intervals || []),
             newStartDate: null,
             newEndDate: null,
             newIntervalFrom: null,
@@ -96,6 +97,19 @@ export default class JotformBlockoutManager extends LightningElement {
             dirty: false,
             dirtyFields: {}
         };
+    }
+
+    _buildAvailableDayOptions(intervals) {
+        const usedDays = new Set();
+        for (const iv of intervals) {
+            for (const d of (iv.days || [])) {
+                usedDays.add(d);
+            }
+        }
+        return DAY_OPTIONS.map(opt => ({
+            ...opt,
+            disabled: usedDays.has(opt.value)
+        }));
     }
 
     // ── Computed properties ───────────────────────────────────
@@ -263,8 +277,8 @@ export default class JotformBlockoutManager extends LightningElement {
                     skippedConflict++;
                     return aq;
                 }
-                const updated = [...aq.intervals, { ...newIv, key: f.formId + '-' + aq.qid + '-iv-' + Date.now() }];
-                return { ...aq, intervals: updated, dirty: true, dirtyFields: { ...aq.dirtyFields, intervals: true } };
+                const updatedIntervals = [...aq.intervals, { ...newIv, key: f.formId + '-' + aq.qid + '-iv-' + Date.now() }];
+                return { ...aq, intervals: updatedIntervals, availableDayOptions: this._buildAvailableDayOptions(updatedIntervals), dirty: true, dirtyFields: { ...aq.dirtyFields, intervals: true } };
             });
             const hasDirty = appointments.some(aq => aq.dirty);
             return { ...f, appointments, hasDirty, cardClass: hasDirty ? 'form-card form-card-dirty' : 'form-card' };
@@ -433,7 +447,14 @@ export default class JotformBlockoutManager extends LightningElement {
     updateAppointment(formId, qid, updater) {
         this.forms = this.forms.map(f => {
             if (f.formId !== formId) return f;
-            const appointments = f.appointments.map(aq => aq.qid !== qid ? aq : updater(aq));
+            const appointments = f.appointments.map(aq => {
+                if (aq.qid !== qid) return aq;
+                const updated = updater(aq);
+                if (updated.intervals !== aq.intervals) {
+                    updated.availableDayOptions = this._buildAvailableDayOptions(updated.intervals);
+                }
+                return updated;
+            });
             const hasDirty = appointments.some(aq => aq.dirty);
             return { ...f, appointments, hasDirty, cardClass: hasDirty ? 'form-card form-card-dirty' : 'form-card' };
         });

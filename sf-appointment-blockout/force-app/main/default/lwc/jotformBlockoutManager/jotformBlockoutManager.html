@@ -213,7 +213,7 @@
                                                     field-level-help="Must be after From and span at least the slot duration"></lightning-input>
                                             </div>
                                             <div class="slds-col slds-size_6-of-12">
-                                                <lightning-checkbox-group label="Days" options={dayOptions} value={aq.newIntervalDays}
+                                                <lightning-checkbox-group label="Days" options={aq.availableDayOptions} value={aq.newIntervalDays}
                                                     data-form-id={form.formId} data-qid={aq.qid}
                                                     onchange={handlePerFormIntervalDays}></lightning-checkbox-group>
                                             </div>
