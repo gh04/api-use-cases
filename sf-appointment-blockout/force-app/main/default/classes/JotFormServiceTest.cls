@@ -4,13 +4,14 @@ private class JotFormServiceTest {
     private static final String QUESTIONS_RESPONSE = '{"responseCode":200,"message":"success","content":{' +
         '"1":{"type":"control_head","text":"Header","qid":"1","name":"heading"},' +
         '"72":{"type":"control_appointment","text":"Schedule Appointment","qid":"72","name":"appointment72",' +
+            '"appointmentType":"single","slotDuration":"30","maxAttendee":"5","rollingDays":"90","minScheduleNotice":"0",' +
+            '"intervals":"[{\\"from\\":\\"10:00\\",\\"to\\":\\"12:00\\",\\"days\\":[\\"Tue\\",\\"Wed\\"]}]",' +
             '"blockoutDates":"[{\\"startDate\\":\\"2026-12-25\\",\\"endDate\\":\\"2026-12-25\\"}]"},' +
+        '"67":{"type":"control_appointment","text":"Book Room","qid":"67","name":"appointment67",' +
+            '"appointmentType":"multiple","slotDuration":"90","maxAttendee":"30","rollingDays":"","minScheduleNotice":"",' +
+            '"intervals":"[{\\"from\\":\\"10:00\\",\\"to\\":\\"16:00\\",\\"days\\":[\\"Mon\\",\\"Tue\\",\\"Wed\\",\\"Thu\\",\\"Fri\\"]}]",' +
+            '"blockoutDates":"[{\\"startDate\\":\\"\\",\\"endDate\\":\\"\\"}]"},' +
         '"5":{"type":"control_textbox","text":"Name","qid":"5","name":"name"}' +
-    '}}';
-
-    private static final String QUESTION_DETAIL_RESPONSE = '{"responseCode":200,"message":"success","content":{' +
-        '"type":"control_appointment","text":"Schedule Appointment","qid":"72","name":"appointment72",' +
-        '"blockoutDates":"[{\\"startDate\\":\\"2026-12-25\\",\\"endDate\\":\\"2026-12-25\\"}]"' +
     '}}';
 
     private static final String SUCCESS_RESPONSE = '{"responseCode":200,"message":"success","content":{}}';
@@ -34,27 +35,6 @@ private class JotFormServiceTest {
         }
     }
 
-    private class MultipleMock implements HttpCalloutMock {
-        private final List<String> responses;
-        private Integer callIndex = 0;
-
-        MultipleMock(List<String> responses) {
-            this.responses = responses;
-        }
-
-        public HttpResponse respond(HttpRequest req) {
-            HttpResponse res = new HttpResponse();
-            res.setStatusCode(200);
-            res.setHeader('Content-Type', 'application/json');
-            String body = (callIndex < responses.size())
-                ? responses[callIndex]
-                : SUCCESS_RESPONSE;
-            callIndex++;
-            res.setBody(body);
-            return res;
-        }
-    }
-
     @isTest
     static void testGetAppointmentQuestions() {
         Test.setMock(HttpCalloutMock.class, new SingleMock(200, QUESTIONS_RESPONSE));
@@ -63,35 +43,42 @@ private class JotFormServiceTest {
             JotFormService.getAppointmentQuestions('123456789');
         Test.stopTest();
 
-        System.assertEquals(1, results.size());
-        System.assertEquals('72', results[0].qid);
-        System.assertEquals('Schedule Appointment', results[0].text);
-        System.assertEquals(1, results[0].blockoutDates.size());
-        System.assertEquals('2026-12-25', results[0].blockoutDates[0].startDate);
+        System.assertEquals(2, results.size());
+
+        JotFormService.AppointmentQuestion aq72;
+        JotFormService.AppointmentQuestion aq67;
+        for (JotFormService.AppointmentQuestion aq : results) {
+            if (aq.qid == '72') aq72 = aq;
+            if (aq.qid == '67') aq67 = aq;
+        }
+
+        System.assertNotEquals(null, aq72);
+        System.assertEquals('single', aq72.appointmentType);
+        System.assertEquals('30', aq72.slotDuration);
+        System.assertEquals('5', aq72.maxAttendee);
+        System.assertEquals('90', aq72.rollingDays);
+        System.assertEquals(1, aq72.blockoutDates.size());
+        System.assertEquals(1, aq72.intervals.size());
+        System.assertEquals('10:00', aq72.intervals[0].fromTime);
+        System.assertEquals(2, aq72.intervals[0].days.size());
+
+        System.assertNotEquals(null, aq67);
+        System.assertEquals('multiple', aq67.appointmentType);
+        System.assertEquals('30', aq67.maxAttendee);
+        System.assertEquals(0, aq67.blockoutDates.size(), 'Empty startDate entries should be filtered');
+        System.assertEquals(5, aq67.intervals[0].days.size());
     }
 
     @isTest
-    static void testGetBlockoutDates() {
-        Test.setMock(HttpCalloutMock.class, new SingleMock(200, QUESTION_DETAIL_RESPONSE));
-        Test.startTest();
-        List<JotFormService.BlockoutDate> dates =
-            JotFormService.getBlockoutDates('123456789', '72');
-        Test.stopTest();
-
-        System.assertEquals(1, dates.size());
-        System.assertEquals('2026-12-25', dates[0].startDate);
-        System.assertEquals('2026-12-25', dates[0].endDate);
-    }
-
-    @isTest
-    static void testUpdateBlockoutDates() {
+    static void testUpdateQuestionProperties() {
         Test.setMock(HttpCalloutMock.class, new SingleMock(200, SUCCESS_RESPONSE));
         Test.startTest();
-        List<JotFormService.BlockoutDate> dates = new List<JotFormService.BlockoutDate>{
-            new JotFormService.BlockoutDate('2026-12-25', '2026-12-25'),
-            new JotFormService.BlockoutDate('2026-12-31', '2027-01-01')
+        Map<String, String> props = new Map<String, String>{
+            'slotDuration' => '60',
+            'maxAttendee' => '10',
+            'blockoutDates' => '[{"startDate":"2026-12-25","endDate":"2026-12-25"}]'
         };
-        JotFormService.updateBlockoutDates('123456789', '72', dates);
+        JotFormService.updateQuestionProperties('123', '72', props);
         Test.stopTest();
     }
 
@@ -125,8 +112,7 @@ private class JotFormServiceTest {
 
         System.assertEquals(1, results.size());
         System.assertEquals('999999999', results[0].formId);
-        System.assertEquals('Test Form', results[0].formName);
-        System.assertEquals(1, results[0].appointments.size());
+        System.assertEquals(2, results[0].appointments.size());
     }
 
     @isTest
@@ -150,12 +136,16 @@ private class JotFormServiceTest {
     }
 
     @isTest
-    static void testBulkUpdateBlockoutDates() {
+    static void testBulkUpdateAppointments() {
         Test.setMock(HttpCalloutMock.class, new SingleMock(200, SUCCESS_RESPONSE));
-        String requestsJson = '[{"formId":"123","questionId":"72","dates":[{"startDate":"2026-12-25","endDate":"2026-12-25"}]}]';
+        String requestsJson = '[{"formId":"123","questionId":"72","properties":{' +
+            '"blockoutDates":"[{\\"startDate\\":\\"2026-12-25\\",\\"endDate\\":\\"2026-12-25\\"}]",' +
+            '"slotDuration":"60",' +
+            '"intervals":"[{\\"from\\":\\"10:00\\",\\"to\\":\\"12:00\\",\\"days\\":[\\"Mon\\",\\"Tue\\"]}]"' +
+        '}}]';
         Test.startTest();
         List<JotFormService.BulkUpdateResult> results =
-            JotFormService.bulkUpdateBlockoutDates(requestsJson);
+            JotFormService.bulkUpdateAppointments(requestsJson);
         Test.stopTest();
 
         System.assertEquals(1, results.size());
@@ -166,10 +156,10 @@ private class JotFormServiceTest {
     @isTest
     static void testBulkUpdateWithFailure() {
         Test.setMock(HttpCalloutMock.class, new SingleMock(401, ERROR_RESPONSE));
-        String requestsJson = '[{"formId":"123","questionId":"72","dates":[]}]';
+        String requestsJson = '[{"formId":"123","questionId":"72","properties":{"slotDuration":"60"}}]';
         Test.startTest();
         List<JotFormService.BulkUpdateResult> results =
-            JotFormService.bulkUpdateBlockoutDates(requestsJson);
+            JotFormService.bulkUpdateAppointments(requestsJson);
         Test.stopTest();
 
         System.assertEquals(1, results.size());
@@ -188,23 +178,23 @@ private class JotFormServiceTest {
         Test.stopTest();
 
         System.assertEquals(true, results[0].success);
-        System.assertNotEquals(null, results[0].appointmentsJson);
     }
 
     @isTest
-    static void testUpdateBlockoutInvocable() {
-        Test.setMock(HttpCalloutMock.class, new SingleMock(200, SUCCESS_RESPONSE));
-        JotFormUpdateBlockoutAction.UpdateBlockoutRequest req = new JotFormUpdateBlockoutAction.UpdateBlockoutRequest();
-        req.formId = '123456789';
-        req.questionId = '72';
-        req.blockoutDatesJson = '[{"startDate":"2026-12-25","endDate":"2026-12-25"}]';
+    static void testParseEmptyIntervals() {
+        String resp = '{"responseCode":200,"message":"success","content":{' +
+            '"1":{"type":"control_appointment","text":"Test","qid":"1","name":"test",' +
+                '"appointmentType":"single","slotDuration":"30","maxAttendee":"1","rollingDays":"","minScheduleNotice":"",' +
+                '"intervals":"[]","blockoutDates":"[]"}' +
+        '}}';
+        Test.setMock(HttpCalloutMock.class, new SingleMock(200, resp));
         Test.startTest();
-        List<JotFormUpdateBlockoutAction.UpdateBlockoutResult> results =
-            JotFormUpdateBlockoutAction.updateBlockoutDates(
-                new List<JotFormUpdateBlockoutAction.UpdateBlockoutRequest>{ req }
-            );
+        List<JotFormService.AppointmentQuestion> results =
+            JotFormService.getAppointmentQuestions('123');
         Test.stopTest();
 
-        System.assertEquals(true, results[0].success);
+        System.assertEquals(1, results.size());
+        System.assertEquals(0, results[0].intervals.size());
+        System.assertEquals(0, results[0].blockoutDates.size());
     }
 }

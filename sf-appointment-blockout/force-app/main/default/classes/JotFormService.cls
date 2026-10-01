@@ -4,6 +4,8 @@ public with sharing class JotFormService {
 
     public class JotFormException extends Exception {}
 
+    // ── Data types ────────────────────────────────────────────────
+
     public class BlockoutDate {
         @AuraEnabled public String startDate;
         @AuraEnabled public String endDate;
@@ -16,11 +18,27 @@ public with sharing class JotFormService {
         }
     }
 
+    public class IntervalSlot {
+        @AuraEnabled public String fromTime;
+        @AuraEnabled public String toTime;
+        @AuraEnabled public List<String> days;
+
+        public IntervalSlot() {
+            this.days = new List<String>();
+        }
+    }
+
     public class AppointmentQuestion {
         @AuraEnabled public String qid;
         @AuraEnabled public String name;
         @AuraEnabled public String text;
+        @AuraEnabled public String appointmentType;
+        @AuraEnabled public String slotDuration;
+        @AuraEnabled public String maxAttendee;
+        @AuraEnabled public String rollingDays;
+        @AuraEnabled public String minScheduleNotice;
         @AuraEnabled public List<BlockoutDate> blockoutDates;
+        @AuraEnabled public List<IntervalSlot> intervals;
     }
 
     public class FormAppointmentData {
@@ -28,12 +46,6 @@ public with sharing class JotFormService {
         @AuraEnabled public String formName;
         @AuraEnabled public List<AppointmentQuestion> appointments;
         @AuraEnabled public String errorMessage;
-    }
-
-    public class BulkUpdateRequest {
-        @AuraEnabled public String formId;
-        @AuraEnabled public String questionId;
-        @AuraEnabled public List<BlockoutDate> dates;
     }
 
     public class BulkUpdateResult {
@@ -91,35 +103,22 @@ public with sharing class JotFormService {
             if (question == null) {
                 continue;
             }
-            String qType = (String) question.get('type');
-            if (qType != 'control_appointment') {
+            if ((String) question.get('type') != 'control_appointment') {
                 continue;
             }
-
-            AppointmentQuestion aq = new AppointmentQuestion();
-            aq.qid = qid;
-            aq.name = (String) question.get('name');
-            aq.text = (String) question.get('text');
-            aq.blockoutDates = parseBlockoutDates((String) question.get('blockoutDates'));
-            results.add(aq);
+            results.add(parseAppointmentQuestion(qid, question));
         }
         return results;
     }
 
-    public static List<BlockoutDate> getBlockoutDates(String formId, String questionId) {
-        HttpResponse res = sendRequest('GET', '/v1/form/' + formId + '/question/' + questionId);
-        Map<String, Object> parsed = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
-        Map<String, Object> content = (Map<String, Object>) parsed.get('content');
-
-        if (content == null) {
-            return new List<BlockoutDate>();
+    public static void updateQuestionProperties(String formId, String questionId, Map<String, String> properties) {
+        String body = '';
+        for (String key : properties.keySet()) {
+            if (body.length() > 0) {
+                body += '&';
+            }
+            body += 'question[' + key + ']=' + EncodingUtil.urlEncode(properties.get(key), 'UTF-8');
         }
-        return parseBlockoutDates((String) content.get('blockoutDates'));
-    }
-
-    public static void updateBlockoutDates(String formId, String questionId, List<BlockoutDate> dates) {
-        String jsonDates = JSON.serialize(dates);
-        String body = 'question[blockoutDates]=' + EncodingUtil.urlEncode(jsonDates, 'UTF-8');
         sendRequest('POST', '/v1/form/' + formId + '/question/' + questionId, body);
     }
 
@@ -145,6 +144,37 @@ public with sharing class JotFormService {
         return results;
     }
 
+    @AuraEnabled
+    public static List<BulkUpdateResult> bulkUpdateAppointments(String requestsJson) {
+        List<Object> rawRequests = (List<Object>) JSON.deserializeUntyped(requestsJson);
+        List<BulkUpdateResult> results = new List<BulkUpdateResult>();
+
+        for (Object rawReq : rawRequests) {
+            Map<String, Object> reqMap = (Map<String, Object>) rawReq;
+            BulkUpdateResult result = new BulkUpdateResult();
+            result.formId = (String) reqMap.get('formId');
+            result.questionId = (String) reqMap.get('questionId');
+
+            try {
+                Map<String, Object> propsRaw = (Map<String, Object>) reqMap.get('properties');
+                Map<String, String> properties = new Map<String, String>();
+                for (String key : propsRaw.keySet()) {
+                    Object val = propsRaw.get(key);
+                    properties.put(key, (val instanceof String) ? (String) val : JSON.serialize(val));
+                }
+                updateQuestionProperties(result.formId, result.questionId, properties);
+                result.success = true;
+            } catch (Exception e) {
+                result.success = false;
+                result.errorMessage = e.getMessage();
+            }
+            results.add(result);
+        }
+        return results;
+    }
+
+    // ── Private helpers ───────────────────────────────────────────
+
     private static List<Map<String, String>> getFormRecords() {
         List<Map<String, String>> records = new List<Map<String, String>>();
         for (SObject obj : Database.query(
@@ -158,29 +188,20 @@ public with sharing class JotFormService {
         return records;
     }
 
-    @AuraEnabled
-    public static List<BulkUpdateResult> bulkUpdateBlockoutDates(String requestsJson) {
-        List<BulkUpdateRequest> requests = (List<BulkUpdateRequest>) JSON.deserialize(
-            requestsJson, List<BulkUpdateRequest>.class
-        );
-        List<BulkUpdateResult> results = new List<BulkUpdateResult>();
-        for (BulkUpdateRequest req : requests) {
-            BulkUpdateResult result = new BulkUpdateResult();
-            result.formId = req.formId;
-            result.questionId = req.questionId;
-            try {
-                updateBlockoutDates(req.formId, req.questionId, req.dates);
-                result.success = true;
-            } catch (Exception e) {
-                result.success = false;
-                result.errorMessage = e.getMessage();
-            }
-            results.add(result);
-        }
-        return results;
+    private static AppointmentQuestion parseAppointmentQuestion(String qid, Map<String, Object> q) {
+        AppointmentQuestion aq = new AppointmentQuestion();
+        aq.qid = qid;
+        aq.name = (String) q.get('name');
+        aq.text = (String) q.get('text');
+        aq.appointmentType = (String) q.get('appointmentType');
+        aq.slotDuration = (String) q.get('slotDuration');
+        aq.maxAttendee = (String) q.get('maxAttendee');
+        aq.rollingDays = (String) q.get('rollingDays');
+        aq.minScheduleNotice = (String) q.get('minScheduleNotice');
+        aq.blockoutDates = parseBlockoutDates((String) q.get('blockoutDates'));
+        aq.intervals = parseIntervals((String) q.get('intervals'));
+        return aq;
     }
-
-    // ── Private helpers ───────────────────────────────────────────
 
     private static List<BlockoutDate> parseBlockoutDates(String raw) {
         List<BlockoutDate> dates = new List<BlockoutDate>();
@@ -194,11 +215,40 @@ public with sharing class JotFormService {
                 BlockoutDate bd = new BlockoutDate();
                 bd.startDate = (String) dateMap.get('startDate');
                 bd.endDate = (String) dateMap.get('endDate');
-                dates.add(bd);
+                if (String.isNotBlank(bd.startDate)) {
+                    dates.add(bd);
+                }
             }
         } catch (Exception e) {
-            // malformed JSON — return empty
+            // malformed JSON
         }
         return dates;
+    }
+
+    private static List<IntervalSlot> parseIntervals(String raw) {
+        List<IntervalSlot> slots = new List<IntervalSlot>();
+        if (String.isBlank(raw) || raw == '[]') {
+            return slots;
+        }
+        try {
+            List<Object> parsed = (List<Object>) JSON.deserializeUntyped(raw);
+            for (Object item : parsed) {
+                Map<String, Object> slotMap = (Map<String, Object>) item;
+                IntervalSlot slot = new IntervalSlot();
+                slot.fromTime = (String) slotMap.get('from');
+                slot.toTime = (String) slotMap.get('to');
+                slot.days = new List<String>();
+                List<Object> daysList = (List<Object>) slotMap.get('days');
+                if (daysList != null) {
+                    for (Object d : daysList) {
+                        slot.days.add((String) d);
+                    }
+                }
+                slots.add(slot);
+            }
+        } catch (Exception e) {
+            // malformed JSON
+        }
+        return slots;
     }
 }
