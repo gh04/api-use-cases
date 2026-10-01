@@ -7,8 +7,7 @@ const ALL_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_OPTIONS = ALL_DAYS.map(d => ({ label: d, value: d }));
 const TYPE_OPTIONS = [
     { label: 'Single', value: 'single' },
-    { label: 'Multiple', value: 'multiple' },
-    { label: 'Group', value: 'group' }
+    { label: 'Group', value: 'multiple' }
 ];
 
 export default class JotformBlockoutManager extends LightningElement {
