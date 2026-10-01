@@ -14,8 +14,8 @@
 }
 
 .add-row {
-    background-color: var(--lwc-colorBackgroundLight, #f4f6f9);
-    border: 1px dashed var(--lwc-colorBorder, #c9c9c9);
+    background-color: #f4f6f9;
+    border: 1px dashed #c9c9c9;
     border-radius: 0.25rem;
 }
 
